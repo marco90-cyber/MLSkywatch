@@ -11,6 +11,14 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.unit.IntOffset
+import coil.compose.AsyncImage
+import com.marco.mlaerei.data.Airlines
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -83,6 +91,13 @@ fun SkyScreen(state: UiState, onSelect: (String) -> Unit, modifier: Modifier = M
                 selectedHex = state.selected?.hex,
                 night = night,
                 onSelect = onSelect,
+                modifier = Modifier.fillMaxSize(),
+            )
+            AirlineLogos(
+                aircraft = state.aircraft,
+                radiusKm = state.radiusKm,
+                selectedHex = state.selected?.hex,
+                night = night,
                 modifier = Modifier.fillMaxSize(),
             )
             val chip = if (weather == null) {
@@ -291,17 +306,66 @@ private fun PlanesLayer(
             val selected = p.a.hex == selectedHex
             val base = if (night) (if (selected) NightAccent else NightInk) else (if (selected) Accent else Ink)
             val color = base.copy(alpha = if (night) max(p.alpha, 0.6f) else p.alpha)
+            val gearDown = p.a.onGround ||
+                ((p.a.altitudeFt ?: 99_999) < 1_800 && (p.a.vertRateFpm ?: 0) < 300)
+            val detailColor = if (night) Color(0xFF0B1426).copy(alpha = 0.8f) else Color.White.copy(alpha = 0.75f)
             with(Silhouettes) {
-                drawSilhouette(p.shape, p.center, p.widthPx, p.facingRight, color)
+                drawSilhouette(p.shape, p.center, p.widthPx, p.facingRight, color, detailColor, gearDown)
             }
             if (selected || p.a.hex in labelled) {
                 native.drawText(
-                    p.a.callsign,
+                    labelOf(p.a),
                     p.center.x,
                     p.center.y + p.widthPx * 0.17f + 12f * dp,
                     if (selected) selectedPaint else labelPaint,
                 )
             }
+        }
+    }
+}
+
+/** Testo sotto la sagoma: nominativo e tipo di aereo (es. "RYR3YJ · B738"). */
+private fun labelOf(a: Aircraft): String =
+    if (a.typeCode != null && a.hasCallsign) "${a.callsign} · ${a.typeCode}" else a.callsign
+
+/** Logo della compagnia accanto all'etichetta degli aerei più vicini e di quello selezionato. */
+@Composable
+private fun AirlineLogos(
+    aircraft: List<Aircraft>,
+    radiusKm: Int,
+    selectedHex: String?,
+    night: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    BoxWithConstraints(modifier) {
+        val dens = LocalDensity.current
+        val wPx = with(dens) { maxWidth.toPx() }
+        val hPx = with(dens) { maxHeight.toPx() }
+        val dp = dens.density
+        val placed = place(aircraft, Size(wPx, hPx), radiusKm, dp)
+        val labelled = placed.takeLast(8).map { it.a.hex }.toSet()
+        val logoDp = 20f
+        for (p in placed) {
+            val selected = p.a.hex == selectedHex
+            if (!selected && p.a.hex !in labelled) continue
+            val iata = if (p.a.hasCallsign) Airlines.info(p.a.callsign)?.iata else null
+            if (iata == null) continue
+            // larghezza stimata del testo (10sp, o 11sp in grassetto se selezionato)
+            val textW = labelOf(p.a).length * (if (selected) 6.3f else 5.6f) * dp
+            val baseline = p.center.y + p.widthPx * 0.17f + 12f * dp
+            val x = (p.center.x - textW / 2f - (logoDp + 3f) * dp).coerceIn(2f * dp, wPx - (logoDp + 2f) * dp)
+            val y = baseline - (logoDp - 3f) * dp
+            AsyncImage(
+                model = Airlines.logoUrl(iata),
+                contentDescription = null,
+                contentScale = ContentScale.Fit,
+                modifier = Modifier
+                    .offset { IntOffset(x.roundToInt(), y.roundToInt()) }
+                    .size(logoDp.dp)
+                    .clip(CircleShape)
+                    .background(if (night) Color(0xFFF1F5F9) else Color.White)
+                    .padding(2.dp),
+            )
         }
     }
 }

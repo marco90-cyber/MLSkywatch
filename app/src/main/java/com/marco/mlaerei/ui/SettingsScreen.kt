@@ -251,6 +251,12 @@ private fun CreditsCard() {
                 text = "Lo sfondo della schermata Cielo segue il meteo di Open-Meteo.com (licenza CC BY 4.0).",
                 links = listOf("open-meteo.com" to "https://open-meteo.com"),
             )
+            CreditItem(
+                title = "Loghi delle compagnie",
+                text = "I loghi nella schermata Cielo vengono scaricati da images.kiwi.com. " +
+                    "I marchi appartengono alle rispettive compagnie aeree.",
+                links = listOf("kiwi.com" to "https://www.kiwi.com"),
+            )
             Text(
                 "I dati sono forniti così come sono e possono avere errori o ritardi: " +
                     "l'app non va usata per la navigazione o per la sicurezza del volo.",
