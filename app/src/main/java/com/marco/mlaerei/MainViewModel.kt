@@ -7,11 +7,9 @@ import com.marco.mlaerei.data.Aircraft
 import com.marco.mlaerei.data.AircraftDetails
 import com.marco.mlaerei.data.AircraftRepository
 import com.marco.mlaerei.data.AppPrefs
-import com.marco.mlaerei.data.Backdrop
 import com.marco.mlaerei.data.Geo
 import com.marco.mlaerei.data.LatLon
-import com.marco.mlaerei.data.PaintingRepository
-import com.marco.mlaerei.data.PaintingStyle
+import com.marco.mlaerei.data.WeatherInfo
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -20,26 +18,19 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import java.io.File
 import kotlin.coroutines.cancellation.CancellationException
 
 data class UiState(
     val radiusKm: Int,
     val showGround: Boolean,
     val refreshSec: Int,
-    val paintingEnabled: Boolean,
-    val paintingStyle: PaintingStyle,
-    val backdrop: Backdrop,
     val permissionGranted: Boolean = false,
     val location: LatLon? = null,
     val aircraft: List<Aircraft> = emptyList(),
     val selectedHex: String? = null,
     val details: AircraftDetails? = null,
     val detailsLoading: Boolean = false,
-    val paintingFile: String? = null,
-    val paintingLoading: Boolean = false,
-    val paintingError: String? = null,
-    val savedPaintings: Int = 0,
+    val weather: WeatherInfo? = null,
     val loading: Boolean = false,
     val error: String? = null,
     val lastUpdate: Long? = null,
@@ -53,17 +44,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private val prefs = AppPrefs(app)
     private val repo = AircraftRepository()
-    private val paintings = PaintingRepository(File(app.filesDir, "paintings"))
 
     private val _ui = MutableStateFlow(
         UiState(
             radiusKm = prefs.radiusKm,
             showGround = prefs.showGround,
             refreshSec = prefs.refreshSec,
-            paintingEnabled = prefs.paintingEnabled,
-            paintingStyle = prefs.paintingStyle,
-            backdrop = prefs.backdrop,
-            savedPaintings = paintings.count(),
         )
     )
     val ui: StateFlow<UiState> = _ui.asStateFlow()
@@ -71,9 +57,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private var pollJob: Job? = null
     private var detailJob: Job? = null
     private var detailHex: String? = null
-    private var paintingJob: Job? = null
-    private var paintingKey: String? = null
     private var active = false
+    private var weatherAt = 0L
 
     private val detailCache = HashMap<String, AircraftDetails>()
     private val emptyUntil = HashMap<String, Long>()
@@ -104,7 +89,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun refreshNow() = restartPolling()
+    fun refreshNow() {
+        weatherAt = 0L
+        restartPolling()
+    }
 
     // ---------------------------------------------------------------------- stato
 
@@ -142,40 +130,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         restartPolling()
     }
 
-    fun setPaintingEnabled(value: Boolean) {
-        prefs.paintingEnabled = value
-        _ui.update { it.copy(paintingEnabled = value) }
-        paintingKey = null
-        ensurePainting()
-    }
-
-    fun setPaintingStyle(style: PaintingStyle) {
-        prefs.paintingStyle = style
-        _ui.update { it.copy(paintingStyle = style) }
-        paintingKey = null
-        ensurePainting()
-    }
-
-    fun setBackdrop(backdrop: Backdrop) {
-        prefs.backdrop = backdrop
-        _ui.update { it.copy(backdrop = backdrop) }
-        paintingKey = null
-        ensurePainting()
-    }
-
-    fun retryPainting() {
-        paintingKey = null
-        ensurePainting()
-    }
-
-    fun clearPaintings() {
-        paintingJob?.cancel()
-        paintings.clear()
-        paintingKey = null
-        _ui.update { it.copy(paintingFile = null, paintingLoading = false, savedPaintings = 0) }
-        ensurePainting()
-    }
-
     // --------------------------------------------------------------------- rete
 
     private suspend fun refreshOnce() {
@@ -203,6 +157,20 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 )
             }
         }
+        refreshWeather(loc)
+    }
+
+    /** Il meteo si aggiorna ogni 10 minuti (se la richiesta fallisce, riprova dopo 1 minuto). */
+    private suspend fun refreshWeather(loc: LatLon) {
+        val now = System.currentTimeMillis()
+        if (now - weatherAt < 600_000L) return
+        weatherAt = now
+        val w = repo.fetchWeather(loc.lat, loc.lon)
+        if (w != null) {
+            _ui.update { it.copy(weather = w) }
+        } else {
+            weatherAt = now - 540_000L
+        }
     }
 
     private fun ensureDetails() {
@@ -210,7 +178,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (sel == null) {
             detailHex = null
             _ui.update { it.copy(details = null, detailsLoading = false) }
-            ensurePainting()
             return
         }
         if (detailHex == sel.hex) return
@@ -218,12 +185,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         detailCache[sel.hex]?.let { cached ->
             detailHex = sel.hex
             _ui.update { it.copy(details = cached, detailsLoading = false) }
-            ensurePainting()
             return
         }
         if ((emptyUntil[sel.hex] ?: 0L) > System.currentTimeMillis()) {
             _ui.update { it.copy(details = AircraftDetails.EMPTY, detailsLoading = false) }
-            ensurePainting()
             return
         }
 
@@ -240,61 +205,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             if (detailHex == sel.hex) {
                 if (d.isEmpty) detailHex = null
                 _ui.update { it.copy(details = d, detailsLoading = false) }
-                ensurePainting()
-            }
-        }
-    }
-
-    /** Dipinge l'aereo selezionato (una volta sola: poi resta salvato sul telefono). */
-    private fun ensurePainting() {
-        val st = _ui.value
-        val sel = st.selected
-
-        if (!st.paintingEnabled || sel == null) {
-            paintingJob?.cancel()
-            paintingKey = null
-            _ui.update { it.copy(paintingFile = null, paintingLoading = false, paintingError = null) }
-            return
-        }
-        if (st.detailsLoading) return
-
-        val prompt = paintings.buildPrompt(sel, st.details, st.paintingStyle, st.backdrop)
-        if (prompt == paintingKey) return
-        paintingKey = prompt
-        paintingJob?.cancel()
-
-        val cached = paintings.cachedFile(prompt)
-        if (cached != null) {
-            _ui.update {
-                it.copy(paintingFile = cached.absolutePath, paintingLoading = false, paintingError = null)
-            }
-            return
-        }
-
-        _ui.update { it.copy(paintingFile = null, paintingLoading = true, paintingError = null) }
-        paintingJob = viewModelScope.launch {
-            try {
-                val file = paintings.getOrCreate(prompt)
-                if (paintingKey == prompt) {
-                    _ui.update {
-                        it.copy(
-                            paintingFile = file.absolutePath,
-                            paintingLoading = false,
-                            savedPaintings = paintings.count(),
-                        )
-                    }
-                }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                if (paintingKey == prompt) {
-                    _ui.update {
-                        it.copy(
-                            paintingLoading = false,
-                            paintingError = "Il dipinto non è arrivato (${e.message ?: "errore di rete"})",
-                        )
-                    }
-                }
             }
         }
     }

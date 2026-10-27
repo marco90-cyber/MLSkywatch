@@ -106,6 +106,7 @@ class AircraftRepository {
                     registration = reg,
                     typeCode = o.str("t"),
                     typeDescription = o.str("desc"),
+                    category = o.str("category"),
                     lat = lat,
                     lon = lon,
                     altitudeFt = altFt,
@@ -197,6 +198,31 @@ class AircraftRepository {
             link = first.str("link"),
             photographer = first.str("photographer"),
         )
+    }
+
+    // --------------------------------------------------------------------- meteo
+
+    /** Meteo attuale da Open-Meteo (gratuito, senza chiave). Restituisce null se non disponibile. */
+    suspend fun fetchWeather(lat: Double, lon: Double): WeatherInfo? = withContext(Dispatchers.IO) {
+        try {
+            val url = "https://api.open-meteo.com/v1/forecast?latitude=$lat&longitude=$lon" +
+                "&current=weather_code,cloud_cover,temperature_2m,is_day&timezone=auto"
+            val cur = JSONObject(httpGet(url)).optJSONObject("current")
+            if (cur == null) {
+                null
+            } else {
+                WeatherInfo(
+                    code = cur.optInt("weather_code", -1),
+                    cloudCover = cur.optInt("cloud_cover", 0),
+                    temperatureC = if (cur.has("temperature_2m")) cur.optDouble("temperature_2m") else null,
+                    isDay = cur.optInt("is_day", 1) == 1,
+                )
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            null
+        }
     }
 
     // ------------------------------------------------------------------- utilità

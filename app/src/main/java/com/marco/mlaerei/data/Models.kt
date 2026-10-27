@@ -15,6 +15,7 @@ data class Aircraft(
     val registration: String?,
     val typeCode: String?,
     val typeDescription: String?,
+    val category: String?,
     val lat: Double,
     val lon: Double,
     val altitudeFt: Int?,
@@ -63,6 +64,40 @@ data class AircraftDetails(
     companion object {
         val EMPTY = AircraftDetails()
     }
+}
+
+enum class WeatherKind(val label: String) {
+    SUNNY("Soleggiato"),
+    PARTLY("Poco nuvoloso"),
+    CLOUDY("Nuvoloso"),
+    FOG("Nebbia"),
+    RAIN("Pioggia"),
+    STORM("Temporale"),
+    SNOW("Neve"),
+}
+
+data class WeatherInfo(
+    val code: Int,
+    val cloudCover: Int,
+    val temperatureC: Double?,
+    val isDay: Boolean,
+) {
+    /** Tipo di meteo ricavato dal codice WMO di Open-Meteo. */
+    val kind: WeatherKind
+        get() = when (code) {
+            0, 1 -> WeatherKind.SUNNY
+            2 -> WeatherKind.PARTLY
+            3 -> WeatherKind.CLOUDY
+            45, 48 -> WeatherKind.FOG
+            in 51..67, in 80..82 -> WeatherKind.RAIN
+            in 71..77, 85, 86 -> WeatherKind.SNOW
+            in 95..99 -> WeatherKind.STORM
+            else -> when {
+                cloudCover >= 70 -> WeatherKind.CLOUDY
+                cloudCover >= 30 -> WeatherKind.PARTLY
+                else -> WeatherKind.SUNNY
+            }
+        }
 }
 
 object Geo {

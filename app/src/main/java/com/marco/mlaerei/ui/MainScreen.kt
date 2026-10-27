@@ -6,6 +6,8 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -31,11 +33,13 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -50,7 +54,6 @@ import coil.compose.AsyncImage
 import com.marco.mlaerei.UiState
 import com.marco.mlaerei.data.Aircraft
 import com.marco.mlaerei.data.AircraftDetails
-import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -61,39 +64,54 @@ fun MainScreen(
     state: UiState,
     onSelect: (String) -> Unit,
     onRefresh: () -> Unit,
-    onRetryPainting: () -> Unit,
     onOpenSettings: () -> Unit,
     onRequestPermission: () -> Unit,
 ) {
+    var tab by rememberSaveable { mutableStateOf(0) }
+    val ready = state.permissionGranted && state.location != null
+
     Scaffold(
         topBar = {
-            CenterAlignedTopAppBar(
-                title = { Text("MLSkywatch", fontWeight = FontWeight.SemiBold) },
-                actions = {
-                    IconButton(onClick = onRefresh) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Aggiorna")
+            Column {
+                CenterAlignedTopAppBar(
+                    title = { Text("MLSkywatch", fontWeight = FontWeight.SemiBold) },
+                    actions = {
+                        IconButton(onClick = onRefresh) {
+                            Icon(Icons.Default.Refresh, contentDescription = "Aggiorna")
+                        }
+                        IconButton(onClick = onOpenSettings) {
+                            Icon(Icons.Default.Settings, contentDescription = "Impostazioni")
+                        }
+                    },
+                )
+                if (ready) {
+                    TabRow(selectedTabIndex = tab) {
+                        Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("Radar") })
+                        Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("Cielo") })
                     }
-                    IconButton(onClick = onOpenSettings) {
-                        Icon(Icons.Default.Settings, contentDescription = "Impostazioni")
-                    }
-                },
-            )
+                }
+            }
         },
     ) { inner ->
-        Column(
-            modifier = Modifier
-                .padding(inner)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            when {
-                !state.permissionGranted -> PermissionCard(onRequestPermission)
-                state.location == null -> SearchingCard()
-                else -> Content(state, onSelect, onRetryPainting)
-            }
+        when {
+            !state.permissionGranted -> ScrollColumn(inner) { PermissionCard(onRequestPermission) }
+            state.location == null -> ScrollColumn(inner) { SearchingCard() }
+            tab == 0 -> ScrollColumn(inner) { RadarTab(state, onSelect) }
+            else -> SkyScreen(state, onSelect, Modifier.padding(inner))
         }
     }
+}
+
+@Composable
+private fun ScrollColumn(inner: PaddingValues, content: @Composable ColumnScope.() -> Unit) {
+    Column(
+        modifier = Modifier
+            .padding(inner)
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        content = content,
+    )
 }
 
 @Composable
@@ -103,7 +121,7 @@ private fun PermissionCard(onRequestPermission: () -> Unit) {
             Text("Serve la tua posizione", style = MaterialTheme.typography.titleMedium)
             Text(
                 "MLSkywatch mostra gli aerei che volano intorno a te, quindi ha bisogno di sapere dove sei. " +
-                    "La posizione resta sul telefono: viene usata solo per chiedere i voli della tua zona.",
+                    "La posizione resta sul telefono: viene usata solo per chiedere i voli e il meteo della tua zona.",
                 style = MaterialTheme.typography.bodyMedium,
             )
             Button(onClick = onRequestPermission) { Text("Consenti la posizione") }
@@ -126,8 +144,10 @@ private fun SearchingCard() {
     }
 }
 
+// ------------------------------------------------------------------------- Radar
+
 @Composable
-private fun Content(state: UiState, onSelect: (String) -> Unit, onRetryPainting: () -> Unit) {
+private fun RadarTab(state: UiState, onSelect: (String) -> Unit) {
     RadarView(
         aircraft = state.aircraft,
         radiusKm = state.radiusKm,
@@ -175,7 +195,7 @@ private fun Content(state: UiState, onSelect: (String) -> Unit, onRetryPainting:
         }
     }
 
-    state.selected?.let { DetailCard(it, state, onRetryPainting) }
+    state.selected?.let { DetailCard(it, state.details, state.detailsLoading) }
 }
 
 @Composable
@@ -202,12 +222,8 @@ private fun LegendItem(color: Color, label: String) {
 }
 
 @Composable
-private fun DetailCard(a: Aircraft, state: UiState, onRetryPainting: () -> Unit) {
+private fun DetailCard(a: Aircraft, details: AircraftDetails?, loading: Boolean) {
     val uriHandler = LocalUriHandler.current
-    val details = state.details
-    val loading = state.detailsLoading
-    var showPainting by remember(a.hex, state.paintingEnabled) { mutableStateOf(state.paintingEnabled) }
-    val paintingShown = state.paintingEnabled && showPainting
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -215,21 +231,7 @@ private fun DetailCard(a: Aircraft, state: UiState, onRetryPainting: () -> Unit)
     ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
 
-            // foto o dipinto
-            if (state.paintingEnabled) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(
-                        selected = showPainting,
-                        onClick = { showPainting = true },
-                        label = { Text("Dipinto") },
-                    )
-                    FilterChip(
-                        selected = !showPainting,
-                        onClick = { showPainting = false },
-                        label = { Text("Foto") },
-                    )
-                }
-            }
+            // foto
             val photo = details?.photoUrl
             Box(
                 modifier = Modifier
@@ -240,38 +242,6 @@ private fun DetailCard(a: Aircraft, state: UiState, onRetryPainting: () -> Unit)
                 contentAlignment = Alignment.Center,
             ) {
                 when {
-                    paintingShown && state.paintingFile != null -> AsyncImage(
-                        model = File(state.paintingFile),
-                        contentDescription = "Dipinto dell'aereo ${a.callsign}",
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxWidth().aspectRatio(16f / 10f),
-                    )
-                    paintingShown && state.paintingError != null -> Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.padding(16.dp),
-                    ) {
-                        Text(
-                            state.paintingError,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center,
-                        )
-                        Button(onClick = onRetryPainting) { Text("Riprova") }
-                    }
-                    paintingShown -> Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.padding(16.dp),
-                    ) {
-                        CircularProgressIndicator()
-                        Text(
-                            "Sto dipingendo l'aereo… può volerci un minuto",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center,
-                        )
-                    }
                     photo != null -> AsyncImage(
                         model = photo,
                         contentDescription = "Foto dell'aereo ${a.callsign}",
@@ -286,15 +256,7 @@ private fun DetailCard(a: Aircraft, state: UiState, onRetryPainting: () -> Unit)
                     )
                 }
             }
-            if (paintingShown) {
-                if (state.paintingFile != null) {
-                    Text(
-                        text = "Dipinto creato dall'AI (Pollinations.ai): non è la foto reale",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            } else if (details != null && photo != null && details.photoSource != null) {
+            if (details != null && photo != null && details.photoSource != null) {
                 val who = details.photographer?.let { "Foto: $it · " } ?: "Foto: "
                 val link = details.photoLink
                 Text(

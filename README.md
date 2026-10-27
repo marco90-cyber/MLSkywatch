@@ -4,7 +4,7 @@ App Android che mostra gli aerei che volano intorno a te: un radar con tutti i v
 
 - Raggio di ricerca regolabile dalle impostazioni (predefinito 50 km, da 5 a 250 km)
 - Posizioni: adsb.lol (di riserva adsb.fi), rotte e dati aeromobile: adsbdb, foto: planespotters.net
-- Dipinti in stile quadro generati dall'AI (Pollinations.ai, gratuito): stile e sfondo a scelta, salvati sul telefono
+- Due schermate: **Radar** (con scheda e foto dell'aereo) e **Cielo** (aerei di profilo, in alto = più alti, più grandi = più vicini, sfondo bianco che cambia con il meteo)
 - Kotlin + Jetpack Compose + Material You, in italiano
 
 ## APK
@@ -12,4 +12,4 @@ Ogni push su `main` compila l'APK con GitHub Actions e lo pubblica nelle **Relea
 La firma usa `app/debug.keystore` (chiave di test pubblica), così ogni versione si installa sopra la precedente.
 
 ## Crediti
-Dati ADS-B: [adsb.lol](https://adsb.lol) (ODbL) e [adsb.fi](https://adsb.fi) · Rotte: [adsbdb.com](https://www.adsbdb.com) · Foto: [planespotters.net](https://www.planespotters.net) e i loro fotografi · Dipinti AI: [pollinations.ai](https://pollinations.ai)
+Dati ADS-B: [adsb.lol](https://adsb.lol) (ODbL) e [adsb.fi](https://adsb.fi) · Rotte: [adsbdb.com](https://www.adsbdb.com) · Foto: [planespotters.net](https://www.planespotters.net) e i loro fotografi · Meteo: [open-meteo.com](https://open-meteo.com)
