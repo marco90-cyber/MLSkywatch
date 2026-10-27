@@ -17,6 +17,20 @@ class AppPrefs(context: Context) {
         get() = sp.getInt(KEY_REFRESH, DEFAULT_REFRESH_SEC)
         set(value) = sp.edit().putInt(KEY_REFRESH, value).apply()
 
+    var paintingEnabled: Boolean
+        get() = sp.getBoolean(KEY_PAINTING, true)
+        set(value) = sp.edit().putBoolean(KEY_PAINTING, value).apply()
+
+    var paintingStyle: PaintingStyle
+        get() = PaintingStyle.values().firstOrNull { it.name == sp.getString(KEY_STYLE, null) }
+            ?: PaintingStyle.POSTER
+        set(value) = sp.edit().putString(KEY_STYLE, value.name).apply()
+
+    var backdrop: Backdrop
+        get() = Backdrop.values().firstOrNull { it.name == sp.getString(KEY_BACKDROP, null) }
+            ?: Backdrop.CLEAR
+        set(value) = sp.edit().putString(KEY_BACKDROP, value.name).apply()
+
     companion object {
         /**
          * Raggio predefinito: un aereo di linea in quota si distingue a occhio nudo,
@@ -30,5 +44,8 @@ class AppPrefs(context: Context) {
         private const val KEY_RADIUS = "radius_km"
         private const val KEY_GROUND = "show_ground"
         private const val KEY_REFRESH = "refresh_sec"
+        private const val KEY_PAINTING = "painting_enabled"
+        private const val KEY_STYLE = "painting_style"
+        private const val KEY_BACKDROP = "painting_backdrop"
     }
 }

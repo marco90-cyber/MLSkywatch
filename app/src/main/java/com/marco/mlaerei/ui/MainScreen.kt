@@ -33,6 +33,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -46,6 +50,7 @@ import coil.compose.AsyncImage
 import com.marco.mlaerei.UiState
 import com.marco.mlaerei.data.Aircraft
 import com.marco.mlaerei.data.AircraftDetails
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -56,6 +61,7 @@ fun MainScreen(
     state: UiState,
     onSelect: (String) -> Unit,
     onRefresh: () -> Unit,
+    onRetryPainting: () -> Unit,
     onOpenSettings: () -> Unit,
     onRequestPermission: () -> Unit,
 ) {
@@ -84,7 +90,7 @@ fun MainScreen(
             when {
                 !state.permissionGranted -> PermissionCard(onRequestPermission)
                 state.location == null -> SearchingCard()
-                else -> Content(state, onSelect)
+                else -> Content(state, onSelect, onRetryPainting)
             }
         }
     }
@@ -121,7 +127,7 @@ private fun SearchingCard() {
 }
 
 @Composable
-private fun Content(state: UiState, onSelect: (String) -> Unit) {
+private fun Content(state: UiState, onSelect: (String) -> Unit, onRetryPainting: () -> Unit) {
     RadarView(
         aircraft = state.aircraft,
         radiusKm = state.radiusKm,
@@ -169,7 +175,7 @@ private fun Content(state: UiState, onSelect: (String) -> Unit) {
         }
     }
 
-    state.selected?.let { DetailCard(it, state.details, state.detailsLoading) }
+    state.selected?.let { DetailCard(it, state, onRetryPainting) }
 }
 
 @Composable
@@ -196,8 +202,12 @@ private fun LegendItem(color: Color, label: String) {
 }
 
 @Composable
-private fun DetailCard(a: Aircraft, details: AircraftDetails?, loading: Boolean) {
+private fun DetailCard(a: Aircraft, state: UiState, onRetryPainting: () -> Unit) {
     val uriHandler = LocalUriHandler.current
+    val details = state.details
+    val loading = state.detailsLoading
+    var showPainting by remember(a.hex, state.paintingEnabled) { mutableStateOf(state.paintingEnabled) }
+    val paintingShown = state.paintingEnabled && showPainting
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -205,7 +215,21 @@ private fun DetailCard(a: Aircraft, details: AircraftDetails?, loading: Boolean)
     ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
 
-            // foto
+            // foto o dipinto
+            if (state.paintingEnabled) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(
+                        selected = showPainting,
+                        onClick = { showPainting = true },
+                        label = { Text("Dipinto") },
+                    )
+                    FilterChip(
+                        selected = !showPainting,
+                        onClick = { showPainting = false },
+                        label = { Text("Foto") },
+                    )
+                }
+            }
             val photo = details?.photoUrl
             Box(
                 modifier = Modifier
@@ -216,6 +240,38 @@ private fun DetailCard(a: Aircraft, details: AircraftDetails?, loading: Boolean)
                 contentAlignment = Alignment.Center,
             ) {
                 when {
+                    paintingShown && state.paintingFile != null -> AsyncImage(
+                        model = File(state.paintingFile),
+                        contentDescription = "Dipinto dell'aereo ${a.callsign}",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxWidth().aspectRatio(16f / 10f),
+                    )
+                    paintingShown && state.paintingError != null -> Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.padding(16.dp),
+                    ) {
+                        Text(
+                            state.paintingError,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center,
+                        )
+                        Button(onClick = onRetryPainting) { Text("Riprova") }
+                    }
+                    paintingShown -> Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.padding(16.dp),
+                    ) {
+                        CircularProgressIndicator()
+                        Text(
+                            "Sto dipingendo l'aereo… può volerci un minuto",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center,
+                        )
+                    }
                     photo != null -> AsyncImage(
                         model = photo,
                         contentDescription = "Foto dell'aereo ${a.callsign}",
@@ -230,7 +286,15 @@ private fun DetailCard(a: Aircraft, details: AircraftDetails?, loading: Boolean)
                     )
                 }
             }
-            if (details != null && photo != null && details.photoSource != null) {
+            if (paintingShown) {
+                if (state.paintingFile != null) {
+                    Text(
+                        text = "Dipinto creato dall'AI (Pollinations.ai): non è la foto reale",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            } else if (details != null && photo != null && details.photoSource != null) {
                 val who = details.photographer?.let { "Foto: $it · " } ?: "Foto: "
                 val link = details.photoLink
                 Text(

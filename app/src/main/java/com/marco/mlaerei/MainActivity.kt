@@ -90,6 +90,10 @@ private fun App(vm: MainViewModel, onRequestPermission: () -> Unit) {
             onRadius = vm::setRadius,
             onShowGround = vm::setShowGround,
             onRefreshSec = vm::setRefreshSec,
+            onPaintingEnabled = vm::setPaintingEnabled,
+            onPaintingStyle = vm::setPaintingStyle,
+            onBackdrop = vm::setBackdrop,
+            onClearPaintings = vm::clearPaintings,
             onBack = { showSettings = false },
         )
     } else {
@@ -97,6 +101,7 @@ private fun App(vm: MainViewModel, onRequestPermission: () -> Unit) {
             state = state,
             onSelect = vm::select,
             onRefresh = vm::refreshNow,
+            onRetryPainting = vm::retryPainting,
             onOpenSettings = { showSettings = true },
             onRequestPermission = onRequestPermission,
         )

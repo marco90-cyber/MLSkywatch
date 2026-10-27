@@ -36,6 +36,8 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import com.marco.mlaerei.UiState
 import com.marco.mlaerei.data.AppPrefs
+import com.marco.mlaerei.data.Backdrop
+import com.marco.mlaerei.data.PaintingStyle
 import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -45,6 +47,10 @@ fun SettingsScreen(
     onRadius: (Int) -> Unit,
     onShowGround: (Boolean) -> Unit,
     onRefreshSec: (Int) -> Unit,
+    onPaintingEnabled: (Boolean) -> Unit,
+    onPaintingStyle: (PaintingStyle) -> Unit,
+    onBackdrop: (Backdrop) -> Unit,
+    onClearPaintings: () -> Unit,
     onBack: () -> Unit,
 ) {
     Scaffold(
@@ -67,6 +73,8 @@ fun SettingsScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             RadiusCard(state.radiusKm, onRadius)
+
+            PaintingCard(state, onPaintingEnabled, onPaintingStyle, onBackdrop, onClearPaintings)
 
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -112,6 +120,76 @@ fun SettingsScreen(
             }
 
             CreditsCard()
+        }
+    }
+}
+
+@Composable
+private fun PaintingCard(
+    state: UiState,
+    onEnabled: (Boolean) -> Unit,
+    onStyle: (PaintingStyle) -> Unit,
+    onBackdrop: (Backdrop) -> Unit,
+    onClear: () -> Unit,
+) {
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("Dipinti dell'aereo", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "Nella scheda dell'aereo compare un dipinto creato dall'AI, oltre alla foto.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(checked = state.paintingEnabled, onCheckedChange = onEnabled)
+            }
+
+            if (state.paintingEnabled) {
+                Text("Stile", style = MaterialTheme.typography.labelLarge)
+                Row(
+                    Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    for (style in PaintingStyle.values()) {
+                        FilterChip(
+                            selected = state.paintingStyle == style,
+                            onClick = { onStyle(style) },
+                            label = { Text(style.label) },
+                        )
+                    }
+                }
+
+                Text("Sfondo", style = MaterialTheme.typography.labelLarge)
+                Row(
+                    Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    for (b in Backdrop.values()) {
+                        FilterChip(
+                            selected = state.backdrop == b,
+                            onClick = { onBackdrop(b) },
+                            label = { Text(b.label) },
+                        )
+                    }
+                }
+
+                Text(
+                    "È gratis, ma il servizio è lento: un dipinto ogni 15-20 secondi circa. " +
+                        "L'AI parte da una descrizione e non dalla foto, quindi livrea e dettagli " +
+                        "possono essere approssimativi. Ogni dipinto resta salvato sul telefono.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                TextButton(onClick = onClear, enabled = state.savedPaintings > 0) {
+                    Text("Svuota i dipinti salvati (${state.savedPaintings})")
+                }
+            }
         }
     }
 }
@@ -192,6 +270,12 @@ private fun CreditsCard() {
                     "planespotters.net" to "https://www.planespotters.net",
                     "airport-data.com" to "https://www.airport-data.com",
                 ),
+            )
+            CreditItem(
+                title = "Dipinti",
+                text = "Le immagini in stile quadro sono generate dall'intelligenza artificiale tramite " +
+                    "Pollinations.ai. Non sono foto e non rappresentano l'aereo con precisione.",
+                links = listOf("pollinations.ai" to "https://pollinations.ai"),
             )
             Text(
                 "I dati sono forniti così come sono e possono avere errori o ritardi: " +
