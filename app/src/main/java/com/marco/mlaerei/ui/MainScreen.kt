@@ -37,6 +37,7 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -64,6 +65,8 @@ fun MainScreen(
     state: UiState,
     onSelect: (String) -> Unit,
     onRefresh: () -> Unit,
+    heading: State<Float>,
+    onToggleHeading: () -> Unit,
     onOpenSettings: () -> Unit,
     onRequestPermission: () -> Unit,
 ) {
@@ -96,7 +99,7 @@ fun MainScreen(
         when {
             !state.permissionGranted -> ScrollColumn(inner) { PermissionCard(onRequestPermission) }
             state.location == null -> ScrollColumn(inner) { SearchingCard() }
-            tab == 0 -> ScrollColumn(inner) { RadarTab(state, onSelect) }
+            tab == 0 -> ScrollColumn(inner) { RadarTab(state, heading, onSelect, onToggleHeading) }
             else -> SkyScreen(state, onSelect, Modifier.padding(inner))
         }
     }
@@ -147,13 +150,34 @@ private fun SearchingCard() {
 // ------------------------------------------------------------------------- Radar
 
 @Composable
-private fun RadarTab(state: UiState, onSelect: (String) -> Unit) {
+private fun RadarTab(
+    state: UiState,
+    heading: State<Float>,
+    onSelect: (String) -> Unit,
+    onToggleHeading: () -> Unit,
+) {
     RadarView(
         aircraft = state.aircraft,
         radiusKm = state.radiusKm,
         selectedHex = state.selected?.hex,
+        headingUp = state.headingUp,
+        heading = heading,
         onSelect = onSelect,
         modifier = Modifier.fillMaxWidth(),
+    )
+    FilterChip(
+        selected = state.headingUp,
+        enabled = state.compassAvailable,
+        onClick = onToggleHeading,
+        label = {
+            Text(
+                when {
+                    !state.compassAvailable -> "Bussola non disponibile"
+                    state.headingUp -> "Il radar segue la bussola"
+                    else -> "Nord in alto"
+                }
+            )
+        },
     )
     Legend()
 

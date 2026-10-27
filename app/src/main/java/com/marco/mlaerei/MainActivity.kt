@@ -16,6 +16,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import com.marco.mlaerei.ui.MLSkywatchTheme
 import com.marco.mlaerei.ui.MainScreen
 import com.marco.mlaerei.ui.SettingsScreen
@@ -24,6 +30,7 @@ class MainActivity : ComponentActivity() {
 
     private val vm: MainViewModel by viewModels()
     private lateinit var locationHelper: LocationHelper
+    private lateinit var headingSensor: HeadingSensor
 
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -38,6 +45,22 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         locationHelper = LocationHelper(this) { vm.setLocation(it.latitude, it.longitude) }
+
+        headingSensor = HeadingSensor(this) { vm.setHeading(it) }
+        vm.setCompassAvailable(headingSensor.available)
+
+        // il sensore della bussola gira solo quando il radar deve seguirla
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                try {
+                    vm.ui.map { it.headingUp }.distinctUntilChanged().collect { on ->
+                        if (on) headingSensor.start() else headingSensor.stop()
+                    }
+                } finally {
+                    headingSensor.stop()
+                }
+            }
+        }
 
         if (savedInstanceState == null && !hasLocationPermission()) requestLocationPermission()
 
@@ -81,6 +104,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun App(vm: MainViewModel, onRequestPermission: () -> Unit) {
     val state by vm.ui.collectAsState()
+    val heading = vm.heading.collectAsState()
     var showSettings by rememberSaveable { mutableStateOf(false) }
 
     if (showSettings) {
@@ -97,6 +121,8 @@ private fun App(vm: MainViewModel, onRequestPermission: () -> Unit) {
             state = state,
             onSelect = vm::select,
             onRefresh = vm::refreshNow,
+            heading = heading,
+            onToggleHeading = vm::toggleHeadingUp,
             onOpenSettings = { showSettings = true },
             onRequestPermission = onRequestPermission,
         )

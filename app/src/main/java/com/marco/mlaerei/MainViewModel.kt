@@ -1,6 +1,7 @@
 package com.marco.mlaerei
 
 import android.app.Application
+import android.hardware.GeomagneticField
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.marco.mlaerei.data.Aircraft
@@ -24,6 +25,8 @@ data class UiState(
     val radiusKm: Int,
     val showGround: Boolean,
     val refreshSec: Int,
+    val headingUp: Boolean,
+    val compassAvailable: Boolean = false,
     val permissionGranted: Boolean = false,
     val location: LatLon? = null,
     val aircraft: List<Aircraft> = emptyList(),
@@ -50,9 +53,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             radiusKm = prefs.radiusKm,
             showGround = prefs.showGround,
             refreshSec = prefs.refreshSec,
+            headingUp = prefs.headingUp,
         )
     )
     val ui: StateFlow<UiState> = _ui.asStateFlow()
+
+    /** Direzione del telefono rispetto al Nord vero, in gradi. Separata dallo stato per non ridisegnare tutto. */
+    private val _heading = MutableStateFlow(0f)
+    val heading: StateFlow<Float> = _heading.asStateFlow()
+    private var declination = 0f
 
     private var pollJob: Job? = null
     private var detailJob: Job? = null
@@ -104,7 +113,22 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val old = _ui.value.location
         if (old != null && Geo.distanceKm(old.lat, old.lon, lat, lon) < 0.1) return
         _ui.update { it.copy(location = LatLon(lat, lon)) }
+        declination = GeomagneticField(lat.toFloat(), lon.toFloat(), 0f, System.currentTimeMillis()).declination
         if (old == null) restartPolling()
+    }
+
+    fun setCompassAvailable(value: Boolean) {
+        _ui.update { it.copy(compassAvailable = value) }
+    }
+
+    fun setHeading(magneticDeg: Float) {
+        _heading.value = (magneticDeg + declination + 360f) % 360f
+    }
+
+    fun toggleHeadingUp() {
+        val value = !_ui.value.headingUp
+        prefs.headingUp = value
+        _ui.update { it.copy(headingUp = value) }
     }
 
     fun select(hex: String) {

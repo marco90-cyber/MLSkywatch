@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -51,9 +52,10 @@ fun altitudeColor(a: Aircraft): Color {
     }
 }
 
-private fun project(a: Aircraft, center: Offset, radius: Float, radiusKm: Int): Offset {
+/** [rotationDeg]: di quanto è ruotato il radar (0 = Nord in alto, altrimenti la direzione del telefono è in alto). */
+private fun project(a: Aircraft, center: Offset, radius: Float, radiusKm: Int, rotationDeg: Float): Offset {
     val f = (a.distanceKm / radiusKm).toFloat().coerceAtMost(1f) * radius
-    val b = Math.toRadians(a.bearingDeg)
+    val b = Math.toRadians(a.bearingDeg - rotationDeg)
     return Offset(center.x + f * sin(b).toFloat(), center.y - f * cos(b).toFloat())
 }
 
@@ -62,6 +64,8 @@ fun RadarView(
     aircraft: List<Aircraft>,
     radiusKm: Int,
     selectedHex: String?,
+    headingUp: Boolean,
+    heading: State<Float>,
     onSelect: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -72,18 +76,26 @@ fun RadarView(
         animationSpec = infiniteRepeatable(tween(4500, easing = LinearEasing)),
         label = "angle",
     )
-    val density = LocalDensity.current
-    val ringPaint = remember(density) {
+    val dens = LocalDensity.current
+    val ringPaint = remember(dens) {
         Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = RadarText
-            textSize = with(density) { 11.sp.toPx() }
+            textSize = with(dens) { 11.sp.toPx() }
             textAlign = Paint.Align.CENTER
         }
     }
-    val labelPaint = remember(density) {
+    val northPaint = remember(dens) {
+        Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = 0xFFFF5252.toInt()
+            textSize = with(dens) { 13.sp.toPx() }
+            textAlign = Paint.Align.CENTER
+            isFakeBoldText = true
+        }
+    }
+    val labelPaint = remember(dens) {
         Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = android.graphics.Color.WHITE
-            textSize = with(density) { 11.sp.toPx() }
+            textSize = with(dens) { 11.sp.toPx() }
             textAlign = Paint.Align.LEFT
         }
     }
@@ -93,14 +105,15 @@ fun RadarView(
             .aspectRatio(1f)
             .clip(RoundedCornerShape(28.dp))
             .background(RadarBackground)
-            .pointerInput(aircraft, radiusKm) {
+            .pointerInput(aircraft, radiusKm, headingUp) {
                 detectTapGestures { tap ->
+                    val rot = if (headingUp) heading.value else 0f
                     val c = Offset(size.width / 2f, size.height / 2f)
                     val r = min(size.width, size.height) / 2f * 0.9f
                     var nearest: Aircraft? = null
                     var nearestDist = Float.MAX_VALUE
                     for (a in aircraft) {
-                        val d = (project(a, c, r, radiusKm) - tap).getDistance()
+                        val d = (project(a, c, r, radiusKm, rot) - tap).getDistance()
                         if (d < nearestDist) {
                             nearestDist = d
                             nearest = a
@@ -111,16 +124,32 @@ fun RadarView(
             },
     ) {
         Canvas(Modifier.fillMaxSize()) {
+            val rot = if (headingUp) heading.value else 0f
             val c = center
             val r = min(size.width, size.height) / 2f * 0.9f
             val line = 1.dp.toPx()
 
-            // anelli e croce
+            // anelli
             for (i in 1..3) {
                 drawCircle(RadarLines, radius = r * i / 3f, center = c, style = Stroke(line))
             }
-            drawLine(RadarLines, Offset(c.x - r, c.y), Offset(c.x + r, c.y), line)
-            drawLine(RadarLines, Offset(c.x, c.y - r), Offset(c.x, c.y + r), line)
+            // croce (ruota con il radar: l'asse verticale è Nord-Sud)
+            rotate(degrees = -rot, pivot = c) {
+                drawLine(RadarLines, Offset(c.x - r, c.y), Offset(c.x + r, c.y), line)
+                drawLine(RadarLines, Offset(c.x, c.y - r), Offset(c.x, c.y + r), line)
+            }
+
+            // cono davanti a te quando il radar segue la bussola
+            if (headingUp) {
+                val spread = Math.toRadians(30.0)
+                val cone = Path().apply {
+                    moveTo(c.x, c.y)
+                    lineTo(c.x - r * sin(spread).toFloat(), c.y - r * cos(spread).toFloat())
+                    lineTo(c.x + r * sin(spread).toFloat(), c.y - r * cos(spread).toFloat())
+                    close()
+                }
+                drawPath(cone, Color.White.copy(alpha = 0.07f))
+            }
 
             // scansione
             rotate(degrees = sweep, pivot = c) {
@@ -136,19 +165,35 @@ fun RadarView(
                 )
             }
 
-            // etichette: punti cardinali e distanze degli anelli
+            // punti cardinali: girano attorno al radar
             val native = drawContext.canvas.nativeCanvas
-            val pad = 4.dp.toPx()
-            native.drawText("N", c.x, c.y - r - pad, ringPaint)
-            native.drawText("S", c.x, c.y + r + pad + ringPaint.textSize * 0.8f, ringPaint)
-            native.drawText("E", c.x + r + pad + ringPaint.textSize * 0.45f, c.y + ringPaint.textSize * 0.35f, ringPaint)
-            native.drawText("O", c.x - r - pad - ringPaint.textSize * 0.45f, c.y + ringPaint.textSize * 0.35f, ringPaint)
+            val labelDist = r + 11.dp.toPx()
+            val cardinals = listOf(0f to "N", 90f to "E", 180f to "S", 270f to "O")
+            for ((deg, name) in cardinals) {
+                val th = Math.toRadians((deg - rot).toDouble())
+                val x = c.x + labelDist * sin(th).toFloat()
+                val paint = if (name == "N") northPaint else ringPaint
+                val y = c.y - labelDist * cos(th).toFloat() + paint.textSize * 0.35f
+                native.drawText(name, x, y, paint)
+            }
+            // distanze degli anelli
             for (i in 1..3) {
                 val km = (radiusKm * i / 3.0).roundToInt()
                 val rr = r * i / 3f * 0.7071f
                 native.drawText("$km km", c.x + rr + 2.dp.toPx(), c.y - rr, labelPaint.apply { alpha = 150 })
             }
             labelPaint.alpha = 255
+
+            // segno della direzione del telefono
+            if (headingUp) {
+                val tip = Path().apply {
+                    moveTo(c.x, c.y - r + 2.dp.toPx())
+                    lineTo(c.x - 6.dp.toPx(), c.y - r + 14.dp.toPx())
+                    lineTo(c.x + 6.dp.toPx(), c.y - r + 14.dp.toPx())
+                    close()
+                }
+                drawPath(tip, Color.White)
+            }
 
             // io al centro
             drawCircle(Color.White, radius = 4.dp.toPx(), center = c)
@@ -158,7 +203,7 @@ fun RadarView(
             val showAllLabels = aircraft.size <= 12
             val selected = aircraft.firstOrNull { it.hex == selectedHex } ?: aircraft.firstOrNull()
             for (a in aircraft) {
-                val p = project(a, c, r, radiusKm)
+                val p = project(a, c, r, radiusKm, rot)
                 val isSel = a.hex == selected?.hex
                 val s = (if (isSel) 11.dp else 8.dp).toPx()
                 val color = altitudeColor(a)
@@ -175,7 +220,7 @@ fun RadarView(
                     lineTo(p.x - s * 0.65f, p.y + s * 0.75f)
                     close()
                 }
-                rotate(degrees = (a.trackDeg ?: 0.0).toFloat(), pivot = p) {
+                rotate(degrees = (a.trackDeg ?: 0.0).toFloat() - rot, pivot = p) {
                     drawPath(path, color)
                 }
 
