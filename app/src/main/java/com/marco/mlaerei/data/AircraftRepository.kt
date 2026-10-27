@@ -128,23 +128,29 @@ class AircraftRepository {
 
     /** Rotta (adsbdb), dati dell'aeromobile (adsbdb) e foto (planespotters.net). Non lancia mai errori di rete. */
     suspend fun fetchDetails(a: Aircraft): AircraftDetails = coroutineScope {
+        val diag = java.util.Collections.synchronizedList(ArrayList<String>())
         val routeJob = async(Dispatchers.IO) {
-            if (a.hasCallsign) safe { fetchRoute(a.callsign) } else null
+            if (a.hasCallsign) tryGet("rotta", diag) { fetchRoute(a.callsign) } else null
         }
-        val infoJob = async(Dispatchers.IO) { safe { fetchAircraftInfo(a.hex) } }
-        val photoJob = async(Dispatchers.IO) { safe { fetchPhoto(a.hex) } }
+        val infoJob = async(Dispatchers.IO) { tryGet("dati aereo", diag) { fetchAircraftInfo(a.hex) } }
+        val photoJob = async(Dispatchers.IO) {
+            tryGet("foto", diag) {
+                fetchPhoto("hex/${a.hex}")
+                    ?: a.registration?.let { fetchPhoto("reg/" + URLEncoder.encode(it, "UTF-8")) }
+            }
+        }
 
         val route = routeJob.await()
         val info = infoJob.await()
         val photo = photoJob.await()
 
         AircraftDetails(
-            airline = route?.airline,
+            airline = route?.airline ?: (if (a.hasCallsign) Airlines.fromCallsign(a.callsign) else null),
             originCity = route?.originCity,
             originCode = route?.originCode,
             destCity = route?.destCity,
             destCode = route?.destCode,
-            model = info?.model,
+            model = info?.model ?: a.typeDescription ?: a.typeCode,
             manufacturer = info?.manufacturer,
             owner = info?.owner,
             photoUrl = photo?.url ?: info?.photoUrl,
@@ -155,6 +161,7 @@ class AircraftRepository {
                 info?.photoUrl != null -> "airport-data.com"
                 else -> null
             },
+            problems = diag.toList(),
         )
     }
 
@@ -186,8 +193,8 @@ class AircraftRepository {
         )
     }
 
-    private fun fetchPhoto(hex: String): PhotoInfo? {
-        val photos = JSONObject(httpGet("https://api.planespotters.net/pub/photos/hex/$hex"))
+    private fun fetchPhoto(path: String): PhotoInfo? {
+        val photos = JSONObject(httpGet("https://api.planespotters.net/pub/photos/$path"))
             .optJSONArray("photos") ?: return null
         val first = photos.optJSONObject(0) ?: return null
         val src = first.optJSONObject("thumbnail_large")?.str("src")
@@ -242,11 +249,15 @@ class AircraftRepository {
         }
     }
 
-    private inline fun <T> safe(block: () -> T): T? = try {
-        block()
+    /** Esegue una richiesta e, se fallisce o non trova nulla, annota il motivo in [diag]. */
+    private fun <T> tryGet(label: String, diag: MutableList<String>, block: () -> T?): T? = try {
+        val r = block()
+        if (r == null) diag.add("$label: nessun dato")
+        r
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
+        diag.add("$label: ${describeError(e)}")
         null
     }
 
@@ -256,6 +267,25 @@ class AircraftRepository {
     }
 
     companion object {
-        private const val USER_AGENT = "MLSkywatch/1.0 (app Android personale)"
+        // planespotters.net chiede un User-Agent descrittivo con un contatto, altrimenti risponde 403
+        private const val USER_AGENT =
+            "MLSkywatch/1.0 (+https://github.com/marco90-cyber/MLSkywatch; app Android personale)"
+
+        /** Messaggio breve e comprensibile per un errore di rete. */
+        fun describeError(e: Throwable): String {
+            val msg = e.message.orEmpty()
+            return when {
+                e is java.net.UnknownHostException -> "nessuna connessione a internet"
+                e is java.net.SocketTimeoutException -> "il server non risponde (timeout)"
+                e is java.net.ConnectException -> "impossibile collegarsi al server"
+                e is javax.net.ssl.SSLException -> "errore di sicurezza nella connessione"
+                msg == "HTTP 404" -> "non trovato"
+                msg == "HTTP 403" -> "accesso rifiutato (403)"
+                msg == "HTTP 429" -> "troppe richieste, riprovo tra poco"
+                msg.startsWith("HTTP 5") -> "il server ha un problema ($msg)"
+                msg.isNotBlank() -> msg
+                else -> "errore sconosciuto"
+            }
+        }
     }
 }

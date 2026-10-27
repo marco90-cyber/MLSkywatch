@@ -11,11 +11,20 @@ import android.os.Looper
 /** Posizione tramite LocationManager (nessuna dipendenza da Google Play Services). */
 class LocationHelper(
     context: Context,
+    private val onProviderChange: () -> Unit = {},
     private val onLocation: (Location) -> Unit,
 ) : LocationListener {
 
     private val manager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
     private var running = false
+
+    /** true se almeno GPS o rete (posizione approssimata) sono attivi nelle impostazioni del telefono. */
+    fun isAnyEnabled(): Boolean = try {
+        manager.isProviderEnabled(LocationManager.GPS_PROVIDER) ||
+            manager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
+    } catch (e: Exception) {
+        true
+    }
 
     @SuppressLint("MissingPermission")
     fun start() {
@@ -55,8 +64,10 @@ class LocationHelper(
     }
 
     override fun onProviderEnabled(provider: String) {
+        onProviderChange()
     }
 
     override fun onProviderDisabled(provider: String) {
+        onProviderChange()
     }
 }

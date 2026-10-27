@@ -30,6 +30,7 @@ data class UiState(
     val themeMode: Int = 0,
     val compassAvailable: Boolean = false,
     val permissionGranted: Boolean = false,
+    val locationEnabled: Boolean = true,
     val location: LatLon? = null,
     val aircraft: List<Aircraft> = emptyList(),
     val selectedHex: String? = null,
@@ -121,6 +122,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (old == null) restartPolling()
     }
 
+    fun setLocationEnabled(value: Boolean) {
+        _ui.update { it.copy(locationEnabled = value) }
+    }
+
     fun setCompassAvailable(value: Boolean) {
         _ui.update { it.copy(compassAvailable = value) }
     }
@@ -191,7 +196,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             _ui.update {
                 it.copy(
                     loading = false,
-                    error = "Impossibile scaricare i voli (${e.message ?: "errore di rete"})",
+                    error = "Impossibile scaricare i voli: ${AircraftRepository.describeError(e)}",
                 )
             }
         }
@@ -235,14 +240,23 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         detailJob?.cancel()
         detailJob = viewModelScope.launch {
             val d = repo.fetchDetails(sel)
+            // errori di rete (non "non trovato"): non si memorizza e si riprova dopo un po'
+            val transient = d.problems.any { !it.endsWith("non trovato") && !it.endsWith("nessun dato") }
             if (d.isEmpty) {
                 emptyUntil[sel.hex] = System.currentTimeMillis() + 60_000L
-            } else {
+            } else if (!transient) {
                 detailCache[sel.hex] = d
             }
             if (detailHex == sel.hex) {
                 if (d.isEmpty) detailHex = null
                 _ui.update { it.copy(details = d, detailsLoading = false) }
+            }
+            if (transient && !d.isEmpty) {
+                delay(30_000L)
+                if (detailHex == sel.hex) {
+                    detailHex = null
+                    ensureDetails()
+                }
             }
         }
     }

@@ -69,6 +69,7 @@ fun MainScreen(
     onToggleHeading: () -> Unit,
     onOpenSettings: () -> Unit,
     onRequestPermission: () -> Unit,
+    onOpenLocationSettings: () -> Unit,
 ) {
     var tab by rememberSaveable { mutableStateOf(0) }
     val ready = state.permissionGranted && state.location != null
@@ -98,7 +99,7 @@ fun MainScreen(
     ) { inner ->
         when {
             !state.permissionGranted -> ScrollColumn(inner) { PermissionCard(onRequestPermission) }
-            state.location == null -> ScrollColumn(inner) { SearchingCard() }
+            state.location == null -> ScrollColumn(inner) { SearchingCard(state.locationEnabled, onOpenLocationSettings) }
             tab == 0 -> ScrollColumn(inner) { RadarTab(state, heading, onSelect, onToggleHeading) }
             else -> SkyScreen(state, onSelect, Modifier.padding(inner))
         }
@@ -133,16 +134,26 @@ private fun PermissionCard(onRequestPermission: () -> Unit) {
 }
 
 @Composable
-private fun SearchingCard() {
+private fun SearchingCard(locationEnabled: Boolean, onOpenLocationSettings: () -> Unit) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("Cerco la tua posizione…", style = MaterialTheme.typography.titleMedium)
-            LinearProgressIndicator(Modifier.fillMaxWidth())
-            Text(
-                "Se ci mette troppo, controlla che il GPS sia attivo.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            if (!locationEnabled) {
+                Text("La posizione del telefono è disattivata", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "Attiva la posizione (GPS) nelle impostazioni del telefono, poi torna qui: " +
+                        "l'app riparte da sola.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Button(onClick = onOpenLocationSettings) { Text("Apri le impostazioni posizione") }
+            } else {
+                Text("Cerco la tua posizione…", style = MaterialTheme.typography.titleMedium)
+                LinearProgressIndicator(Modifier.fillMaxWidth())
+                Text(
+                    "Al chiuso il GPS può metterci un po': prova vicino a una finestra o all'aperto.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }
@@ -316,6 +327,14 @@ private fun DetailCard(a: Aircraft, details: AircraftDetails?, loading: Boolean)
             }
 
             StatsGrid(buildStats(a, details))
+
+            if (details != null && details.problems.isNotEmpty()) {
+                Text(
+                    "Dati mancanti → " + details.problems.joinToString(" · "),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }

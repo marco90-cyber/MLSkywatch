@@ -1,7 +1,9 @@
 package com.marco.mlaerei
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.provider.Settings
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -45,7 +47,13 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        locationHelper = LocationHelper(this) { vm.setLocation(it.latitude, it.longitude) }
+        locationHelper = LocationHelper(
+            this,
+            onProviderChange = {
+                vm.setLocationEnabled(locationHelper.isAnyEnabled())
+                if (locationHelper.isAnyEnabled() && hasLocationPermission()) locationHelper.start()
+            },
+        ) { vm.setLocation(it.latitude, it.longitude) }
 
         headingSensor = HeadingSensor(this) { vm.setHeading(it) }
         vm.setCompassAvailable(headingSensor.available)
@@ -69,7 +77,13 @@ class MainActivity : ComponentActivity() {
             val themeMode by vm.ui.map { it.themeMode }.distinctUntilChanged()
                 .collectAsState(initial = vm.ui.value.themeMode)
             MLSkywatchTheme(themeMode) {
-                App(vm = vm, onRequestPermission = { requestLocationPermission() })
+                App(
+                    vm = vm,
+                    onRequestPermission = { requestLocationPermission() },
+                    onOpenLocationSettings = {
+                        startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
+                    },
+                )
             }
         }
     }
@@ -78,6 +92,7 @@ class MainActivity : ComponentActivity() {
         super.onStart()
         val granted = hasLocationPermission()
         vm.setPermission(granted)
+        vm.setLocationEnabled(locationHelper.isAnyEnabled())
         if (granted) locationHelper.start()
         vm.startPolling()
     }
@@ -105,7 +120,11 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-private fun App(vm: MainViewModel, onRequestPermission: () -> Unit) {
+private fun App(
+    vm: MainViewModel,
+    onRequestPermission: () -> Unit,
+    onOpenLocationSettings: () -> Unit,
+) {
     val state by vm.ui.collectAsState()
     val heading = vm.heading.collectAsState()
     Fmt.imperial = state.imperial
@@ -131,6 +150,7 @@ private fun App(vm: MainViewModel, onRequestPermission: () -> Unit) {
             onToggleHeading = vm::toggleHeadingUp,
             onOpenSettings = { showSettings = true },
             onRequestPermission = onRequestPermission,
+            onOpenLocationSettings = onOpenLocationSettings,
         )
     }
 }

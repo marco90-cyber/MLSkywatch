@@ -56,6 +56,8 @@ data class AircraftDetails(
     val photoLink: String? = null,
     val photographer: String? = null,
     val photoSource: String? = null,
+    /** Servizi che non hanno risposto o non conoscono l'aereo (solo per diagnosi). */
+    val problems: List<String> = emptyList(),
 ) {
     val isEmpty: Boolean
         get() = airline == null && originCode == null && destCode == null &&
