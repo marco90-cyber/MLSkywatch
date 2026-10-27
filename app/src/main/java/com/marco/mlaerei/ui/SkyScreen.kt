@@ -48,12 +48,22 @@ import kotlin.math.roundToInt
 private const val MAX_ALT_M = 13_500.0
 private val Ink = Color(0xFF2B3A47)
 private val Accent = Color(0xFF1565C0)
+private val NightInk = Color(0xFFF1F5F9)
+private val NightAccent = Color(0xFFFFCA28)
+
+/** Notte: lo dice il meteo (is_day); se manca, si usa l'ora del telefono. */
+private fun isNightNow(weather: com.marco.mlaerei.data.WeatherInfo?): Boolean {
+    if (weather != null) return !weather.isDay
+    val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+    return hour < 6 || hour >= 20
+}
 
 // ---------------------------------------------------------------------- schermata
 
 @Composable
 fun SkyScreen(state: UiState, onSelect: (String) -> Unit, modifier: Modifier = Modifier) {
     val weather = state.weather
+    val night = isNightNow(weather)
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -66,11 +76,12 @@ fun SkyScreen(state: UiState, onSelect: (String) -> Unit, modifier: Modifier = M
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(28.dp)),
         ) {
-            WeatherBackdrop(weather?.kind, Modifier.fillMaxSize())
+            WeatherBackdrop(weather?.kind, night, Modifier.fillMaxSize())
             PlanesLayer(
                 aircraft = state.aircraft,
                 radiusKm = state.radiusKm,
                 selectedHex = state.selected?.hex,
+                night = night,
                 onSelect = onSelect,
                 modifier = Modifier.fillMaxSize(),
             )
@@ -82,18 +93,21 @@ fun SkyScreen(state: UiState, onSelect: (String) -> Unit, modifier: Modifier = M
             Text(
                 text = chip,
                 style = MaterialTheme.typography.labelMedium,
-                color = Color(0xFF37474F),
+                color = if (night) Color(0xFFE3EAF2) else Color(0xFF37474F),
                 modifier = Modifier
                     .align(Alignment.TopStart)
                     .padding(12.dp)
-                    .background(Color.White.copy(alpha = 0.8f), RoundedCornerShape(12.dp))
+                    .background(
+                        if (night) Color(0xFF000000).copy(alpha = 0.35f) else Color.White.copy(alpha = 0.8f),
+                        RoundedCornerShape(12.dp),
+                    )
                     .padding(horizontal = 10.dp, vertical = 5.dp),
             )
             if (state.aircraft.isEmpty()) {
                 Text(
                     text = "Nessun aereo entro ${state.radiusKm} km",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = Color(0xFF546E7A),
+                    color = if (night) Color(0xFFB0BEC5) else Color(0xFF546E7A),
                     modifier = Modifier.align(Alignment.Center),
                 )
             }
@@ -184,34 +198,35 @@ private fun PlanesLayer(
     aircraft: List<Aircraft>,
     radiusKm: Int,
     selectedHex: String?,
+    night: Boolean,
     onSelect: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val dens = LocalDensity.current
-    val gridPaint = remember(dens) {
+    val gridPaint = remember(dens, night) {
         Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = 0xFF90A4AE.toInt()
+            color = (if (night) 0xFF9FB0C3 else 0xFF90A4AE).toInt()
             textSize = with(dens) { 10.sp.toPx() }
             textAlign = Paint.Align.LEFT
         }
     }
-    val compassPaint = remember(dens) {
+    val compassPaint = remember(dens, night) {
         Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = 0xFF546E7A.toInt()
+            color = (if (night) 0xFFCFD8DC else 0xFF546E7A).toInt()
             textSize = with(dens) { 11.sp.toPx() }
             textAlign = Paint.Align.CENTER
         }
     }
-    val labelPaint = remember(dens) {
+    val labelPaint = remember(dens, night) {
         Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = 0xFF263238.toInt()
+            color = (if (night) 0xFFFFFFFF else 0xFF263238).toInt()
             textSize = with(dens) { 10.sp.toPx() }
             textAlign = Paint.Align.CENTER
         }
     }
-    val selectedPaint = remember(dens) {
+    val selectedPaint = remember(dens, night) {
         Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = 0xFF1565C0.toInt()
+            color = (if (night) 0xFFFFCA28 else 0xFF1565C0).toInt()
             textSize = with(dens) { 11.sp.toPx() }
             textAlign = Paint.Align.CENTER
             isFakeBoldText = true
@@ -252,17 +267,17 @@ private fun PlanesLayer(
         val dash = PathEffect.dashPathEffect(floatArrayOf(10f * dp, 8f * dp))
         for (km in listOf(3, 6, 9, 12)) {
             val y = groundY - (km * 1000.0 / MAX_ALT_M).toFloat() * (groundY - topY)
-            drawLine(Color(0x22000000), Offset(0f, y), Offset(w, y), strokeWidth = dp, pathEffect = dash)
+            drawLine(if (night) Color(0x44FFFFFF) else Color(0x22000000), Offset(0f, y), Offset(w, y), strokeWidth = dp, pathEffect = dash)
             native.drawText("$km km", 10f * dp, y - 4f * dp, gridPaint)
         }
 
         // terra e punti cardinali
-        drawRect(Color(0xFFDDE3E8), Offset(0f, groundY), Size(w, h - groundY))
-        drawLine(Color(0xFFB0BEC5), Offset(0f, groundY), Offset(w, groundY), strokeWidth = 1.5f * dp)
+        drawRect(if (night) Color(0xFF0A111F) else Color(0xFFDDE3E8), Offset(0f, groundY), Size(w, h - groundY))
+        drawLine(if (night) Color(0xFF5C6F87) else Color(0xFFB0BEC5), Offset(0f, groundY), Offset(w, groundY), strokeWidth = 1.5f * dp)
         val names = listOf("N", "NE", "E", "SE", "S", "SO", "O", "NO", "N")
         for ((i, name) in names.withIndex()) {
             val x = (i * 45f / 360f * w).coerceIn(12f * dp, w - 12f * dp)
-            drawLine(Color(0xFFB0BEC5), Offset(x, groundY), Offset(x, groundY + 6f * dp), strokeWidth = dp)
+            drawLine(if (night) Color(0xFF5C6F87) else Color(0xFFB0BEC5), Offset(x, groundY), Offset(x, groundY + 6f * dp), strokeWidth = dp)
             native.drawText(name, x, groundY + 20f * dp, compassPaint)
         }
 
@@ -271,7 +286,8 @@ private fun PlanesLayer(
         val labelled = placed.takeLast(8).map { it.a.hex }.toSet()
         for (p in placed) {
             val selected = p.a.hex == selectedHex
-            val color = (if (selected) Accent else Ink).copy(alpha = p.alpha)
+            val base = if (night) (if (selected) NightAccent else NightInk) else (if (selected) Accent else Ink)
+            val color = base.copy(alpha = if (night) max(p.alpha, 0.6f) else p.alpha)
             with(Silhouettes) {
                 drawSilhouette(p.shape, p.center, p.widthPx, p.facingRight, color)
             }
@@ -310,7 +326,7 @@ private fun DrawScope.cloud(cx: Float, cy: Float, r: Float, color: Color) {
 
 /** Sfondo bianco che cambia con il meteo: sole, nuvole, nebbia, pioggia, temporale, neve. */
 @Composable
-fun WeatherBackdrop(kind: WeatherKind?, modifier: Modifier = Modifier) {
+fun WeatherBackdrop(kind: WeatherKind?, night: Boolean, modifier: Modifier = Modifier) {
     val transition = rememberInfiniteTransition(label = "weather")
     val drift by transition.animateFloat(
         initialValue = 0f,
@@ -350,10 +366,45 @@ fun WeatherBackdrop(kind: WeatherKind?, modifier: Modifier = Modifier) {
             WeatherKind.SNOW -> Color(0xFFF6F9FC)
             else -> Color.White
         }
-        drawRect(bg)
+        if (night) {
+            val (top, bottom) = when (kind) {
+                WeatherKind.CLOUDY, WeatherKind.FOG -> Color(0xFF1A2230) to Color(0xFF2B3647)
+                WeatherKind.RAIN -> Color(0xFF161E2B) to Color(0xFF263143)
+                WeatherKind.STORM -> Color(0xFF10151F) to Color(0xFF1F2837)
+                else -> Color(0xFF070D1C) to Color(0xFF1B2B4D)
+            }
+            drawRect(Brush.verticalGradient(listOf(top, bottom)))
+        } else {
+            drawRect(bg)
+        }
+
+        // stelle e luna
+        val clearNight = night && (kind == null || kind == WeatherKind.SUNNY || kind == WeatherKind.PARTLY || kind == WeatherKind.SNOW)
+        if (clearNight) {
+            val starCount = if (kind == WeatherKind.PARTLY || kind == WeatherKind.SNOW) 30 else 60
+            for (i in 0 until starCount) {
+                val sx = ((i * 7919) % 1000) / 1000f * w
+                val sy = ((i * 104729) % 1000) / 1000f * h * 0.85f
+                val tw = 0.5f + 0.5f * kotlin.math.sin((snow + i * 0.137f) * 6.2832f * 2f)
+                drawCircle(Color.White.copy(alpha = 0.35f + 0.55f * tw), radius = (0.8f + (i % 3) * 0.5f) * dp, center = Offset(sx, sy))
+            }
+            val mc = Offset(w * 0.80f, h * 0.16f)
+            val mr = min(w, h) * 0.07f
+            drawCircle(
+                brush = Brush.radialGradient(
+                    listOf(Color(0x44FFF8E1), Color(0x00FFF8E1)),
+                    center = mc,
+                    radius = mr * 3.2f,
+                ),
+                radius = mr * 3.2f,
+                center = mc,
+            )
+            drawCircle(Color(0xFFFFF8E1), mr, mc)
+            drawCircle(Color(0xFF0B1630), mr * 0.82f, Offset(mc.x + mr * 0.5f, mc.y - mr * 0.15f))
+        }
 
         // sole
-        if (kind == WeatherKind.SUNNY || kind == WeatherKind.PARTLY) {
+        if (!night && (kind == WeatherKind.SUNNY || kind == WeatherKind.PARTLY)) {
             val sc = Offset(w * 0.80f, h * 0.16f)
             val sr = min(w, h) * 0.10f
             drawCircle(
@@ -375,7 +426,13 @@ fun WeatherBackdrop(kind: WeatherKind?, modifier: Modifier = Modifier) {
             WeatherKind.SNOW -> 5
             else -> 0
         }
-        val cloudColor = when (kind) {
+        val cloudColor = if (night) when (kind) {
+            WeatherKind.PARTLY -> Color(0xFF263349)
+            WeatherKind.CLOUDY -> Color(0xFF2E3A4D)
+            WeatherKind.RAIN -> Color(0xFF354256)
+            WeatherKind.STORM -> Color(0xFF2A3446)
+            else -> Color(0xFF2C384C)
+        } else when (kind) {
             WeatherKind.PARTLY -> Color(0xFFE3E8EC)
             WeatherKind.CLOUDY -> Color(0xFFC9D1D8)
             WeatherKind.RAIN -> Color(0xFFB0BAC4)
@@ -396,7 +453,7 @@ fun WeatherBackdrop(kind: WeatherKind?, modifier: Modifier = Modifier) {
                 val bandH = h * 0.18f
                 drawRect(
                     brush = Brush.verticalGradient(
-                        listOf(Color(0x00B0BEC5), Color(0x77B0BEC5), Color(0x00B0BEC5)),
+                        listOf(if (night) Color(0x007C8DA3) else Color(0x00B0BEC5), if (night) Color(0x557C8DA3) else Color(0x77B0BEC5), if (night) Color(0x007C8DA3) else Color(0x00B0BEC5)),
                         startY = h * yf - bandH / 2f,
                         endY = h * yf + bandH / 2f,
                     ),
@@ -414,13 +471,13 @@ fun WeatherBackdrop(kind: WeatherKind?, modifier: Modifier = Modifier) {
                 val ry = ((i * 104729) % 1000) / 1000f
                 val x = rx * w
                 val y = ((ry + fall) % 1f) * h
-                drawLine(Color(0x889DB0C2), Offset(x, y), Offset(x - 4f * dp, y + 14f * dp), strokeWidth = 1.5f * dp)
+                drawLine(if (night) Color(0x889FB4CC) else Color(0x889DB0C2), Offset(x, y), Offset(x - 4f * dp, y + 14f * dp), strokeWidth = 1.5f * dp)
             }
         }
 
         // fulmine
         if (kind == WeatherKind.STORM && (flash in 0.50f..0.52f || flash in 0.56f..0.575f)) {
-            drawRect(Color.White.copy(alpha = 0.6f))
+            drawRect(Color.White.copy(alpha = if (night) 0.3f else 0.6f))
         }
 
         // neve
@@ -431,7 +488,7 @@ fun WeatherBackdrop(kind: WeatherKind?, modifier: Modifier = Modifier) {
                 val sway = kotlin.math.sin((ry + snow) * 6.2832f) * 8f * dp
                 val x = rx * w + sway
                 val y = ((ry + snow) % 1f) * h
-                drawCircle(Color(0xFFB7C7D9), radius = 2.5f * dp, center = Offset(x, y))
+                drawCircle(if (night) Color(0xFFDCE6F2) else Color(0xFFB7C7D9), radius = 2.5f * dp, center = Offset(x, y))
             }
         }
     }

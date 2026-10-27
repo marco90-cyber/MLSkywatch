@@ -29,13 +29,14 @@ class HeadingSensor(
     private var sinAvg = 0f
     private var cosAvg = 0f
     private var primed = false
-    private var lastSent = -1000f
+    private var lastSent = Float.NaN
 
     val available: Boolean get() = sensor != null
 
     fun start() {
         val s = sensor ?: return
         primed = false
+        lastSent = Float.NaN
         manager.registerListener(this, s, SensorManager.SENSOR_DELAY_UI)
     }
 
@@ -73,8 +74,8 @@ class HeadingSensor(
         }
         val deg = ((Math.toDegrees(atan2(sinAvg, cosAvg).toDouble()) + 360.0) % 360.0).toFloat()
 
-        var diff = abs(deg - lastSent)
-        if (diff > 180f) diff = 360f - diff
+        var diff = if (lastSent.isNaN()) 360f else abs(deg - lastSent)
+        if (diff > 180f && !lastSent.isNaN()) diff = 360f - diff
         if (diff >= 0.7f) {
             lastSent = deg
             onHeading(deg)
