@@ -173,8 +173,8 @@ private fun RadarTab(
             Text(
                 when {
                     !state.compassAvailable -> "Bussola non disponibile"
-                    state.headingUp -> "Il radar segue la bussola"
-                    else -> "Nord in alto"
+                    state.headingUp -> "Bussola on"
+                    else -> "Bussola off"
                 }
             )
         },
@@ -229,10 +229,10 @@ private fun Legend() {
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        LegendItem(Color(0xFFFF7043), "< 3.000 ft")
-        LegendItem(Color(0xFFFFCA28), "< 10.000 ft")
-        LegendItem(Color(0xFF66BB6A), "< 25.000 ft")
-        LegendItem(Color(0xFF42A5F5), "≥ 25.000 ft")
+        LegendItem(Color(0xFFFF7043), if (Fmt.imperial) "< 3.000 ft" else "< 900 m")
+        LegendItem(Color(0xFFFFCA28), if (Fmt.imperial) "< 10.000 ft" else "< 3.000 m")
+        LegendItem(Color(0xFF66BB6A), if (Fmt.imperial) "< 25.000 ft" else "< 7.600 m")
+        LegendItem(Color(0xFF42A5F5), if (Fmt.imperial) "≥ 25.000 ft" else "≥ 7.600 m")
     }
 }
 
