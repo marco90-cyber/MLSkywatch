@@ -26,6 +26,8 @@ data class UiState(
     val showGround: Boolean,
     val refreshSec: Int,
     val headingUp: Boolean,
+    val imperial: Boolean = false,
+    val themeMode: Int = 0,
     val compassAvailable: Boolean = false,
     val permissionGranted: Boolean = false,
     val location: LatLon? = null,
@@ -54,6 +56,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             showGround = prefs.showGround,
             refreshSec = prefs.refreshSec,
             headingUp = prefs.headingUp,
+            imperial = prefs.imperial,
+            themeMode = prefs.themeMode,
         )
     )
     val ui: StateFlow<UiState> = _ui.asStateFlow()
@@ -129,6 +133,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val value = !_ui.value.headingUp
         prefs.headingUp = value
         _ui.update { it.copy(headingUp = value) }
+    }
+
+    fun setImperial(value: Boolean) {
+        prefs.imperial = value
+        _ui.update { it.copy(imperial = value) }
+    }
+
+    fun setThemeMode(mode: Int) {
+        prefs.themeMode = mode
+        _ui.update { it.copy(themeMode = mode) }
     }
 
     fun select(hex: String) {

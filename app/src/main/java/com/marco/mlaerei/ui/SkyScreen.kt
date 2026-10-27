@@ -88,7 +88,7 @@ fun SkyScreen(state: UiState, onSelect: (String) -> Unit, modifier: Modifier = M
             val chip = if (weather == null) {
                 "Meteo non disponibile"
             } else {
-                weather.kind.label + (weather.temperatureC?.let { " · ${it.roundToInt()}°C" } ?: "")
+                weather.kind.label + (weather.temperatureC?.let { " · ${Fmt.temperature(it)}" } ?: "")
             }
             Text(
                 text = chip,
@@ -105,7 +105,7 @@ fun SkyScreen(state: UiState, onSelect: (String) -> Unit, modifier: Modifier = M
             )
             if (state.aircraft.isEmpty()) {
                 Text(
-                    text = "Nessun aereo entro ${state.radiusKm} km",
+                    text = "Nessun aereo entro ${Fmt.distWhole(state.radiusKm.toDouble())}",
                     style = MaterialTheme.typography.bodyMedium,
                     color = if (night) Color(0xFFB0BEC5) else Color(0xFF546E7A),
                     modifier = Modifier.align(Alignment.Center),
@@ -132,13 +132,13 @@ private fun SkySummary(a: Aircraft, state: UiState) {
     val line1 = listOfNotNull(a.callsign, model, who).joinToString(" · ")
     val alt = when {
         a.onGround -> "a terra"
-        a.altitudeM != null -> "${Fmt.int(a.altitudeM!!)} m"
+        a.altitudeM != null -> Fmt.altitude(a.altitudeM!!)
         else -> null
     }
     val line2 = listOfNotNull(
         alt,
         "${Fmt.km(a.distanceKm)} verso ${Fmt.degrees(a.bearingDeg)}",
-        a.speedKmh?.let { "${Fmt.int(it)} km/h" },
+        a.speedKmh?.let { Fmt.speed(it) },
         Fmt.elevation(a.elevationDeg),
     ).joinToString(" · ")
 
@@ -265,10 +265,13 @@ private fun PlanesLayer(
 
         // linee di quota
         val dash = PathEffect.dashPathEffect(floatArrayOf(10f * dp, 8f * dp))
-        for (km in listOf(3, 6, 9, 12)) {
-            val y = groundY - (km * 1000.0 / MAX_ALT_M).toFloat() * (groundY - topY)
+        val imp = Fmt.imperial
+        val marks = if (imp) listOf(10, 20, 30, 40) else listOf(3, 6, 9, 12)
+        for (km in marks) {
+            val meters = if (imp) km * 1000.0 / Fmt.FT_PER_M else km * 1000.0
+            val y = groundY - (meters / MAX_ALT_M).toFloat() * (groundY - topY)
             drawLine(if (night) Color(0x44FFFFFF) else Color(0x22000000), Offset(0f, y), Offset(w, y), strokeWidth = dp, pathEffect = dash)
-            native.drawText("$km km", 10f * dp, y - 4f * dp, gridPaint)
+            native.drawText(if (imp) "${km}k ft" else "$km km", 10f * dp, y - 4f * dp, gridPaint)
         }
 
         // terra e punti cardinali

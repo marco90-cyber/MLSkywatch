@@ -45,6 +45,8 @@ fun SettingsScreen(
     onRadius: (Int) -> Unit,
     onShowGround: (Boolean) -> Unit,
     onRefreshSec: (Int) -> Unit,
+    onImperial: (Boolean) -> Unit,
+    onThemeMode: (Int) -> Unit,
     onBack: () -> Unit,
 ) {
     Scaffold(
@@ -66,7 +68,50 @@ fun SettingsScreen(
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            RadiusCard(state.radiusKm, onRadius)
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Unità di misura", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "Cambia distanze, quote, velocità e temperatura in tutta l'app.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(
+                            selected = !state.imperial,
+                            onClick = { onImperial(false) },
+                            label = { Text("Metrico (km, m, km/h, °C)") },
+                        )
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(
+                            selected = state.imperial,
+                            onClick = { onImperial(true) },
+                            label = { Text("Imperiale (mi, ft, mph, °F)") },
+                        )
+                    }
+                }
+            }
+
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Tema", style = MaterialTheme.typography.titleMedium)
+                    Row(
+                        Modifier.horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        listOf(0 to "Sistema", 1 to "Chiaro", 2 to "Scuro").forEach { (m, name) ->
+                            FilterChip(
+                                selected = state.themeMode == m,
+                                onClick = { onThemeMode(m) },
+                                label = { Text(name) },
+                            )
+                        }
+                    }
+                }
+            }
+
+            RadiusCard(state.radiusKm, state.imperial, onRadius)
 
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -117,14 +162,23 @@ fun SettingsScreen(
 }
 
 @Composable
-private fun RadiusCard(radiusKm: Int, onRadius: (Int) -> Unit) {
-    var tmp by remember(radiusKm) { mutableFloatStateOf(radiusKm.toFloat()) }
+private fun RadiusCard(radiusKm: Int, imperial: Boolean, onRadius: (Int) -> Unit) {
+    val f = if (imperial) Fmt.KM_PER_MI else 1.0
+    val unit = if (imperial) "mi" else "km"
+    fun toUnit(km: Int) = (km / f).roundToInt().toFloat()
+    fun toKm(u: Float) = (u * f).roundToInt().coerceIn(AppPrefs.MIN_RADIUS_KM, AppPrefs.MAX_RADIUS_KM)
+
+    var tmp by remember(radiusKm, imperial) { mutableFloatStateOf(toUnit(radiusKm)) }
+    val minU = toUnit(AppPrefs.MIN_RADIUS_KM)
+    val maxU = toUnit(AppPrefs.MAX_RADIUS_KM)
+    val presets = if (imperial) listOf(5, 15, 30, 60, 150) else listOf(10, 25, 50, 100, 250)
+    val defaultU = toUnit(AppPrefs.DEFAULT_RADIUS_KM).roundToInt()
 
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Raggio di ricerca", style = MaterialTheme.typography.titleMedium)
             Text(
-                "${tmp.roundToInt()} km",
+                "${tmp.roundToInt()} $unit",
                 style = MaterialTheme.typography.headlineMedium,
                 color = MaterialTheme.colorScheme.primary,
                 fontWeight = FontWeight.Bold,
@@ -132,27 +186,26 @@ private fun RadiusCard(radiusKm: Int, onRadius: (Int) -> Unit) {
             Slider(
                 value = tmp,
                 onValueChange = { tmp = it },
-                onValueChangeFinished = { onRadius(tmp.roundToInt()) },
-                valueRange = AppPrefs.MIN_RADIUS_KM.toFloat()..AppPrefs.MAX_RADIUS_KM.toFloat(),
-                steps = 48,
+                onValueChangeFinished = { onRadius(toKm(tmp)) },
+                valueRange = minU..maxU,
             )
             Row(
                 Modifier.horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                for (km in listOf(10, 25, 50, 100, 250)) {
+                for (u in presets) {
                     FilterChip(
-                        selected = tmp.roundToInt() == km,
+                        selected = tmp.roundToInt() == u,
                         onClick = {
-                            tmp = km.toFloat()
-                            onRadius(km)
+                            tmp = u.toFloat()
+                            onRadius(toKm(tmp))
                         },
-                        label = { Text("$km km") },
+                        label = { Text("$u $unit") },
                     )
                 }
             }
             Text(
-                "Il valore predefinito è ${AppPrefs.DEFAULT_RADIUS_KM} km: è la distanza fino a cui, " +
+                "Il valore predefinito è $defaultU $unit: è la distanza fino a cui, " +
                     "con aria limpida e senza ostacoli, un aereo di linea in quota si riesce ancora a " +
                     "distinguere a occhio nudo. È una stima: foschia, nuvole e posizione cambiano molto " +
                     "quello che si vede davvero.",
@@ -160,9 +213,9 @@ private fun RadiusCard(radiusKm: Int, onRadius: (Int) -> Unit) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             TextButton(onClick = {
-                tmp = AppPrefs.DEFAULT_RADIUS_KM.toFloat()
+                tmp = defaultU.toFloat()
                 onRadius(AppPrefs.DEFAULT_RADIUS_KM)
-            }) { Text("Ripristina ${AppPrefs.DEFAULT_RADIUS_KM} km") }
+            }) { Text("Ripristina $defaultU $unit") }
         }
     }
 }

@@ -178,9 +178,9 @@ fun RadarView(
             }
             // distanze degli anelli
             for (i in 1..3) {
-                val km = (radiusKm * i / 3.0).roundToInt()
+                val label = Fmt.distWhole(radiusKm * i / 3.0)
                 val rr = r * i / 3f * 0.7071f
-                native.drawText("$km km", c.x + rr + 2.dp.toPx(), c.y - rr, labelPaint.apply { alpha = 150 })
+                native.drawText(label, c.x + rr + 2.dp.toPx(), c.y - rr, labelPaint.apply { alpha = 150 })
             }
             labelPaint.alpha = 255
 

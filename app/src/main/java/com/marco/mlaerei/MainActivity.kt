@@ -22,6 +22,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import com.marco.mlaerei.ui.Fmt
 import com.marco.mlaerei.ui.MLSkywatchTheme
 import com.marco.mlaerei.ui.MainScreen
 import com.marco.mlaerei.ui.SettingsScreen
@@ -65,7 +66,9 @@ class MainActivity : ComponentActivity() {
         if (savedInstanceState == null && !hasLocationPermission()) requestLocationPermission()
 
         setContent {
-            MLSkywatchTheme {
+            val themeMode by vm.ui.map { it.themeMode }.distinctUntilChanged()
+                .collectAsState(initial = vm.ui.value.themeMode)
+            MLSkywatchTheme(themeMode) {
                 App(vm = vm, onRequestPermission = { requestLocationPermission() })
             }
         }
@@ -105,6 +108,7 @@ class MainActivity : ComponentActivity() {
 private fun App(vm: MainViewModel, onRequestPermission: () -> Unit) {
     val state by vm.ui.collectAsState()
     val heading = vm.heading.collectAsState()
+    Fmt.imperial = state.imperial
     var showSettings by rememberSaveable { mutableStateOf(false) }
 
     if (showSettings) {
@@ -114,6 +118,8 @@ private fun App(vm: MainViewModel, onRequestPermission: () -> Unit) {
             onRadius = vm::setRadius,
             onShowGround = vm::setShowGround,
             onRefreshSec = vm::setRefreshSec,
+            onImperial = vm::setImperial,
+            onThemeMode = vm::setThemeMode,
             onBack = { showSettings = false },
         )
     } else {

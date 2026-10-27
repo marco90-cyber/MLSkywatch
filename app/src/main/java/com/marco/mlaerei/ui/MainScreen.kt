@@ -188,7 +188,7 @@ private fun RadarTab(
         else -> "${state.aircraft.size} aerei"
     }
     Text(
-        text = "$count entro ${state.radiusKm} km" + (time?.let { " · aggiornato alle $it" } ?: ""),
+        text = "$count entro ${Fmt.distWhole(state.radiusKm.toDouble())}" + (time?.let { " · aggiornato alle $it" } ?: ""),
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.fillMaxWidth(),
@@ -325,11 +325,11 @@ private fun buildStats(a: Aircraft, d: AircraftDetails?): List<Pair<String, Stri
 
     val alt = when {
         a.onGround -> "A terra"
-        a.altitudeM != null -> "${Fmt.int(a.altitudeM!!)} m · ${Fmt.int(a.altitudeFt!!)} ft"
+        a.altitudeM != null -> Fmt.altitude(a.altitudeM!!)
         else -> null
     }
     alt?.let { items.add("Altitudine" to it) }
-    a.speedKmh?.let { items.add("Velocità" to "${Fmt.int(it)} km/h · ${a.speedKt!!.toInt()} kt") }
+    a.speedKmh?.let { items.add("Velocità" to Fmt.speed(it)) }
     items.add("Distanza" to "${Fmt.km(a.distanceKm)} verso ${Fmt.degrees(a.bearingDeg)}")
     Fmt.elevation(a.elevationDeg)?.let { items.add("Nel cielo" to it) }
     a.trackDeg?.let { items.add("Direzione di volo" to Fmt.degrees(it)) }

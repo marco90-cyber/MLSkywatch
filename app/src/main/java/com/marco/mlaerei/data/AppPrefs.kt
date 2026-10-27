@@ -21,6 +21,15 @@ class AppPrefs(context: Context) {
         get() = sp.getBoolean(KEY_HEADING_UP, false)
         set(value) = sp.edit().putBoolean(KEY_HEADING_UP, value).apply()
 
+    var imperial: Boolean
+        get() = sp.getBoolean(KEY_IMPERIAL, false)
+        set(value) = sp.edit().putBoolean(KEY_IMPERIAL, value).apply()
+
+    /** 0 = come il sistema, 1 = chiaro, 2 = scuro */
+    var themeMode: Int
+        get() = sp.getInt(KEY_THEME, 0)
+        set(value) = sp.edit().putInt(KEY_THEME, value).apply()
+
     companion object {
         /**
          * Raggio predefinito: un aereo di linea in quota si distingue a occhio nudo,
@@ -35,5 +44,7 @@ class AppPrefs(context: Context) {
         private const val KEY_GROUND = "show_ground"
         private const val KEY_REFRESH = "refresh_sec"
         private const val KEY_HEADING_UP = "heading_up"
+        private const val KEY_IMPERIAL = "imperial"
+        private const val KEY_THEME = "theme_mode"
     }
 }

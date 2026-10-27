@@ -11,8 +11,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
 
 @Composable
-fun MLSkywatchTheme(content: @Composable () -> Unit) {
-    val dark = isSystemInDarkTheme()
+fun MLSkywatchTheme(themeMode: Int = 0, content: @Composable () -> Unit) {
+    val dark = when (themeMode) {
+        1 -> false
+        2 -> true
+        else -> isSystemInDarkTheme()
+    }
     val context = LocalContext.current
     val scheme = when {
         Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ->
