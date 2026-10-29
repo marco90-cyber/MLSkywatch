@@ -19,12 +19,25 @@ android {
 
     // Chiave di firma di test inclusa nel repo (app/debug.keystore): tiene la firma
     // uguale a ogni build, così l'APK si aggiorna sopra la versione già installata.
+    // Se nel build ci sono i dati della chiave privata (KEYSTORE_PATH, KEYSTORE_PASSWORD, impostati
+    // da GitHub Actions con i secrets) si firma con quella; altrimenti con la chiave di test.
+    val releaseKeystorePath: String? = System.getenv("KEYSTORE_PATH")?.takeIf { it.isNotBlank() }
+    val releaseKeystorePassword: String? = System.getenv("KEYSTORE_PASSWORD")?.takeIf { it.isNotBlank() }
+    val useReleaseKey = releaseKeystorePath != null && releaseKeystorePassword != null && file(releaseKeystorePath).exists()
+
     signingConfigs {
         create("shared") {
-            storeFile = file("debug.keystore")
-            storePassword = "android"
-            keyAlias = "androiddebugkey"
-            keyPassword = "android"
+            if (useReleaseKey) {
+                storeFile = file(releaseKeystorePath!!)
+                storePassword = releaseKeystorePassword
+                keyAlias = "mlskywatch"
+                keyPassword = releaseKeystorePassword
+            } else {
+                storeFile = file("debug.keystore")
+                storePassword = "android"
+                keyAlias = "androiddebugkey"
+                keyPassword = "android"
+            }
         }
     }
 

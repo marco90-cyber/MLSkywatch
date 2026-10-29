@@ -11,6 +11,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -24,6 +25,12 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.LocalContext
+import com.marco.mlaerei.data.UpdateChecker
+import com.marco.mlaerei.data.UpdateResult
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
@@ -156,6 +163,8 @@ fun SettingsScreen(
                 }
             }
 
+            UpdateCard()
+
             CreditsCard()
         }
     }
@@ -216,6 +225,66 @@ private fun RadiusCard(radiusKm: Int, imperial: Boolean, onRadius: (Int) -> Unit
                 tmp = defaultU.toFloat()
                 onRadius(AppPrefs.DEFAULT_RADIUS_KM)
             }) { Text("Ripristina $defaultU $unit") }
+        }
+    }
+}
+
+@Composable
+private fun UpdateCard() {
+    val context = LocalContext.current
+    val uriHandler = LocalUriHandler.current
+    val scope = rememberCoroutineScope()
+    var checking by remember { mutableStateOf(false) }
+    var result by remember { mutableStateOf<UpdateResult?>(null) }
+    val current = remember { UpdateChecker.installed(context).second }
+
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Aggiornamenti", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "Versione installata: $current",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Button(
+                enabled = !checking,
+                onClick = {
+                    checking = true
+                    result = null
+                    scope.launch {
+                        result = UpdateChecker.check(context)
+                        checking = false
+                    }
+                },
+            ) { Text(if (checking) "Controllo in corso…" else "Cerca aggiornamenti") }
+
+            when (val r = result) {
+                is UpdateResult.UpToDate -> Text(
+                    "Hai già l'ultima versione.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                is UpdateResult.Available -> {
+                    Text(
+                        "È disponibile la versione ${r.versionName}.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        "Si scarica l'APK dal browser: poi toccalo per installare sopra quella attuale.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Button(onClick = { uriHandler.openUri(r.downloadUrl) }) { Text("Scarica e installa") }
+                    TextButton(onClick = { uriHandler.openUri(r.pageUrl) }) { Text("Vedi la pagina della versione") }
+                }
+                is UpdateResult.Failed -> Text(
+                    "Non riesco a controllare: ${r.reason}.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+                null -> {}
+            }
         }
     }
 }
