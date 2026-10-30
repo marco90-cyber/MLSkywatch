@@ -77,6 +77,7 @@ class MainActivity : ComponentActivity() {
             val themeMode by vm.ui.map { it.themeMode }.distinctUntilChanged()
                 .collectAsState(initial = vm.ui.value.themeMode)
             MLSkywatchTheme(themeMode) {
+                AppUpdateHost()
                 App(
                     vm = vm,
                     onRequestPermission = { requestLocationPermission() },

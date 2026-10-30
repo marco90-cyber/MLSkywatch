@@ -232,10 +232,6 @@ private fun RadiusCard(radiusKm: Int, imperial: Boolean, onRadius: (Int) -> Unit
 @Composable
 private fun UpdateCard() {
     val context = LocalContext.current
-    val uriHandler = LocalUriHandler.current
-    val scope = rememberCoroutineScope()
-    var checking by remember { mutableStateOf(false) }
-    var result by remember { mutableStateOf<UpdateResult?>(null) }
     val current = remember { UpdateChecker.installed(context).second }
 
     Card(Modifier.fillMaxWidth()) {
@@ -245,46 +241,12 @@ private fun UpdateCard() {
                 "Versione installata: $current",
                 style = MaterialTheme.typography.bodyMedium,
             )
-            Button(
-                enabled = !checking,
-                onClick = {
-                    checking = true
-                    result = null
-                    scope.launch {
-                        result = UpdateChecker.check(context)
-                        checking = false
-                    }
-                },
-            ) { Text(if (checking) "Controllo in corso…" else "Cerca aggiornamenti") }
-
-            when (val r = result) {
-                is UpdateResult.UpToDate -> Text(
-                    "Hai già l'ultima versione.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                is UpdateResult.Available -> {
-                    Text(
-                        "È disponibile la versione ${r.versionName}.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    Text(
-                        "Si scarica l'APK dal browser: poi toccalo per installare sopra quella attuale.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Button(onClick = { uriHandler.openUri(r.downloadUrl) }) { Text("Scarica e installa") }
-                    TextButton(onClick = { uriHandler.openUri(r.pageUrl) }) { Text("Vedi la pagina della versione") }
-                }
-                is UpdateResult.Failed -> Text(
-                    "Non riesco a controllare: ${r.reason}.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                )
-                null -> {}
-            }
+            Text(
+                "Scarica e installa la nuova versione direttamente nell'app, con Pausa, Riprendi e Annulla.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Button(onClick = { com.marco.mlaerei.AppUpdate.open(context) }) { Text("Cerca aggiornamenti") }
         }
     }
 }
