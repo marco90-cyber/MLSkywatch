@@ -17,12 +17,5 @@ fun MLSkywatchTheme(themeMode: Int = 0, content: @Composable () -> Unit) {
         2 -> true
         else -> isSystemInDarkTheme()
     }
-    val context = LocalContext.current
-    val scheme = when {
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ->
-            if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        dark -> darkColorScheme()
-        else -> lightColorScheme()
-    }
-    MaterialTheme(colorScheme = scheme, content = content)
+    com.marco.mltheme.MLTheme(mode = if (dark) "dark" else "light", content = content)
 }

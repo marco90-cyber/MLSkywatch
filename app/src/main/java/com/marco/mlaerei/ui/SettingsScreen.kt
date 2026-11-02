@@ -21,7 +21,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -44,8 +43,23 @@ import androidx.compose.ui.unit.dp
 import com.marco.mlaerei.UiState
 import com.marco.mlaerei.data.AppPrefs
 import kotlin.math.roundToInt
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.material.icons.filled.Refresh
+import com.marco.mltheme.AccentPreview
+import com.marco.mltheme.MLChoiceRow
+import com.marco.mltheme.MLGroup
+import com.marco.mltheme.MLNavRow
+import com.marco.mltheme.MLSettingsScaffold
+import com.marco.mltheme.MLSwitchRow
+import com.marco.mltheme.MLThemeSettings
+import com.marco.mltheme.SWITCH_STYLES
+import com.marco.mltheme.SwitchStylePreview
+import com.marco.mltheme.THEME_MODES
+import com.marco.mltheme.ThemePreview
+import com.marco.mltheme.availableAccents
 
-@OptIn(ExperimentalMaterial3Api::class)
+/** Impostazioni nello stile di MLauncher (MLTheme). */
 @Composable
 fun SettingsScreen(
     state: UiState,
@@ -56,118 +70,58 @@ fun SettingsScreen(
     onThemeMode: (Int) -> Unit,
     onBack: () -> Unit,
 ) {
-    Scaffold(
-        topBar = {
-            CenterAlignedTopAppBar(
-                title = { Text("Impostazioni", fontWeight = FontWeight.SemiBold) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Indietro")
-                    }
-                },
-            )
-        },
-    ) { inner ->
-        Column(
-            modifier = Modifier
-                .padding(inner)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Card(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Unità di misura", style = MaterialTheme.typography.titleMedium)
-                    Text(
-                        "Cambia distanze, quote, velocità e temperatura in tutta l'app.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilterChip(
-                            selected = !state.imperial,
-                            onClick = { onImperial(false) },
-                            label = { Text("Metrico (km, m, km/h, °C)") },
-                        )
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilterChip(
-                            selected = state.imperial,
-                            onClick = { onImperial(true) },
-                            label = { Text("Imperiale (mi, ft, mph, °F)") },
-                        )
-                    }
-                }
+    val context = LocalContext.current
+    val ml = MLThemeSettings.get(context)
+    MLSettingsScaffold("Impostazioni", onBack = onBack) {
+        MLGroup("Tema") {
+            MLChoiceRow(
+                "Tema",
+                THEME_MODES,
+                when (state.themeMode) { 1 -> "light"; 2 -> "dark"; else -> "auto" },
+                preview = { ThemePreview(it) },
+            ) { onThemeMode(when (it) { "light" -> 1; "dark" -> 2; else -> 0 }) }
+            MLChoiceRow("Colori", availableAccents, ml.accent, preview = { AccentPreview(it) }) { ml.accent = it }
+            MLChoiceRow("Stile degli interruttori", SWITCH_STYLES, ml.switchStyle, preview = { SwitchStylePreview(it) }) {
+                ml.switchStyle = it
             }
-
-            Card(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Tema", style = MaterialTheme.typography.titleMedium)
-                    Row(
-                        Modifier.horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        listOf(0 to "Sistema", 1 to "Chiaro", 2 to "Scuro").forEach { (m, name) ->
-                            FilterChip(
-                                selected = state.themeMode == m,
-                                onClick = { onThemeMode(m) },
-                                label = { Text(name) },
-                            )
-                        }
-                    }
-                }
-            }
-
-            RadiusCard(state.radiusKm, state.imperial, onRadius)
-
-            Card(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        Column(Modifier.weight(1f)) {
-                            Text("Mostra aerei a terra", style = MaterialTheme.typography.titleMedium)
-                            Text(
-                                "Include gli aerei fermi o in rullaggio negli aeroporti vicini.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        Switch(checked = state.showGround, onCheckedChange = onShowGround)
-                    }
-                }
-            }
-
-            Card(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Aggiornamento", style = MaterialTheme.typography.titleMedium)
-                    Text(
-                        "Ogni quanti secondi scaricare i voli.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Row(
-                        Modifier.horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        for (sec in listOf(5, 10, 20, 30)) {
-                            FilterChip(
-                                selected = state.refreshSec == sec,
-                                onClick = { onRefreshSec(sec) },
-                                label = { Text("$sec s") },
-                            )
-                        }
-                    }
-                }
-            }
-
-            UpdateCard()
-
-            CreditsCard()
         }
+        MLGroup("Voli") {
+            MLChoiceRow(
+                "Unità di misura",
+                listOf("metric" to "Metrico (km, m, km/h, °C)", "imperial" to "Imperiale (mi, ft, mph, °F)"),
+                if (state.imperial) "imperial" else "metric",
+            ) { onImperial(it == "imperial") }
+            MLSwitchRow(
+                "Mostra aerei a terra",
+                "Include gli aerei fermi o in rullaggio negli aeroporti vicini",
+                state.showGround,
+                onChange = onShowGround,
+            )
+            MLChoiceRow(
+                "Aggiornamento",
+                listOf(5, 10, 20, 30).map { it.toString() to "Ogni $it secondi" },
+                state.refreshSec.toString(),
+            ) { onRefreshSec(it.toInt()) }
+        }
+        RadiusCard(state.radiusKm, state.imperial, onRadius)
+        MLGroup("Aggiornamenti") {
+            val current = remember { UpdateChecker.installed(context).second }
+            MLNavRow("Cerca aggiornamenti", "Versione installata: $current", icon = Icons.Filled.Refresh) {
+                com.marco.mlaerei.AppUpdate.open(context)
+            }
+        }
+        CreditsCard()
     }
+}
+
+/** Contenuto libero dentro un gruppo, con lo sfondo delle righe. */
+@Composable
+private fun GroupBox(content: @Composable ColumnScope.() -> Unit) {
+    Column(
+        Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainer).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        content = content,
+    )
 }
 
 @Composable
@@ -183,9 +137,8 @@ private fun RadiusCard(radiusKm: Int, imperial: Boolean, onRadius: (Int) -> Unit
     val presets = if (imperial) listOf(5, 15, 30, 60, 150) else listOf(10, 25, 50, 100, 250)
     val defaultU = toUnit(AppPrefs.DEFAULT_RADIUS_KM).roundToInt()
 
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Raggio di ricerca", style = MaterialTheme.typography.titleMedium)
+    MLGroup("Raggio di ricerca") {
+        GroupBox {
             Text(
                 "${tmp.roundToInt()} $unit",
                 style = MaterialTheme.typography.headlineMedium,
@@ -230,32 +183,9 @@ private fun RadiusCard(radiusKm: Int, imperial: Boolean, onRadius: (Int) -> Unit
 }
 
 @Composable
-private fun UpdateCard() {
-    val context = LocalContext.current
-    val current = remember { UpdateChecker.installed(context).second }
-
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Aggiornamenti", style = MaterialTheme.typography.titleMedium)
-            Text(
-                "Versione installata: $current",
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            Text(
-                "Scarica e installa la nuova versione direttamente nell'app, con Pausa, Riprendi e Annulla.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Button(onClick = { com.marco.mlaerei.AppUpdate.open(context) }) { Text("Cerca aggiornamenti") }
-        }
-    }
-}
-
-@Composable
 private fun CreditsCard() {
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("Informazioni e crediti", style = MaterialTheme.typography.titleMedium)
+    MLGroup("Informazioni e crediti") {
+        GroupBox {
 
             CreditItem(
                 title = "Posizioni degli aerei",
